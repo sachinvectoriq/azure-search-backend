@@ -190,7 +190,7 @@ Conversation History: {conversation_history}
     search_text=search_query,
     vector_queries=[vector_query],
     select=["title", "chunk", "parent_id"],
-    top=10,  # increase the number of results
+    top=5,  # increase the number of results
     semantic_configuration_name="index-obe-semantic-configuration",
     query_type="semantic",          # enable semantic ranking          # enable extractive answers
 )
