@@ -127,29 +127,48 @@ def search_and_answer_query(user_query, user_id):
     )
 
     Dynamic_PROMPT = """
-You are an AI assistant helping users by answering their questions strictly based on the content in the sources below.
+You are an AI assistant tasked with helping users retrieve information exclusively from the documents provided. Respond only using information explicitly available in the documents uploaded by the user.
 
-Instructions:
-- Extract only factual and relevant information from the provided sources.
-- Cite each fact with the document title or link when possible.
-- Use bullet points for lists or multiple facts.
-- If the answer is long, start with a short summary followed by details.
-- If the answer is not fully supported by the sources, respond: "There is not enough information available in the sources provided."
+# Steps
+1. Carefully analyze the content of the documents provided by the user.
+2. Identify relevant sections, phrases, or data that directly correspond to the user's question or request.
+3. Respond with specific references to the document (e.g., page numbers, section headings, or quoted text) when applicable.
+4. If the user’s question cannot be answered based on the provided documents, explicitly state that the requested information is unavailable in the files provided.
+5. Avoid adding any information that is not derived from the documents themselves.
 
-Constraints:
-- Do NOT use prior knowledge or assumptions.
-- Do NOT fabricate or guess any information.
-- ONLY rely on the text in the "Sources" section.
+# Output Format
+- Provide very detailed answers using information from the documents.
+- Reference the document and relevant section/page if possible.
+  - Example: "According to Document A, page 3, section 2.1: [quote or information]."
+- If the question cannot be answered with the documents:
+  - Respond with: "The requested information is not available in the provided documents."
 
-Original User Query: {query}
+# Examples
 
-Rephrased Query (for retrieval): {search_query}
+## Example 1
+Input: What is the recommended dosage of medication X?  
+Output: Based on Document 1, page 4, the recommended dosage of medication X is 50mg daily.
 
-Conversation History:
-{conversation_history}
+## Example 2
+Input: What is the company mission statement?  
+Output: The mission statement is not included in the documents provided.
 
-Sources:
-{sources}
+## Example 3
+Input: What is the historical success rate for project Y?  
+Output: According to Document 2, section "Project Y Review," the historical success rate is 85%.
+
+# Notes
+1. Always stay within the scope of the uploaded documents.
+2. Do not infer, fabricate, or rely on external knowledge.
+3. When referencing sections, use document-specific terminology like "page," "chapter," or "section."
+4. Ensure clarity to help the user quickly verify the information.
+
+# Dynamic Input
+Original Query: {query}  
+Rephrased Query: {search_query}  
+Sources: {sources}  
+Conversation History: {conversation_history}
+
     """
 
     GROUNDED_PROMPT = Dynamic_PROMPT
@@ -171,7 +190,7 @@ Sources:
     search_text=search_query,
     vector_queries=[vector_query],
     select=["title", "chunk", "parent_id"],
-    top=7,  # increase the number of results
+    top=10,  # increase the number of results
     semantic_configuration_name="index-obe-semantic-configuration",
     query_type="semantic",          # enable semantic ranking          # enable extractive answers
 )
@@ -186,19 +205,16 @@ Sources:
         chunk = doc.get("chunk", "N/A")
         parent_id_encoded = doc.get("parent_id", "Unknown Document")
         parent_id_decoded = safe_base64_decode(parent_id_encoded)
-        
-        cleaned_chunk = chunk.replace("\n", " ").replace("\t", " ").strip()
+
         chunks_json.append({
             "title": title,
-            "chunk": cleaned_chunk,
+            "chunk": chunk,
             "parent_id": parent_id_decoded
         })
 
-        sources_list.append(f"Document Title: {title}\nSource Link: {parent_id_decoded}\nContent:\n{chunk}\n")
+        sources_list.append(f'DOCUMENT: {parent_id_decoded}, TITLE: {title}, CONTENT: {chunk}')
 
-
-    sources_formatted = "\n---\n".join(sources_list)
-
+    sources_formatted = "\n=================\n".join(sources_list)
 
     prompt = GROUNDED_PROMPT.format(
         query=user_query,
@@ -206,12 +222,11 @@ Sources:
         sources=sources_formatted,
         conversation_history=conversation_history
     )
-    print(f"[Token count estimate]: {len(prompt.split())}")
 
     response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
-        temperature=0.8
+        temperature=0.8 
     )
 
     ai_response = response.choices[0].message.content
