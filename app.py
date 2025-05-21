@@ -215,7 +215,7 @@ Sources:
 
     follow_up_prompt = f"""
     Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
-    Only use the content in the sources. If info is missing, say "Not enough data".
+    Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
 
     Format the response as:
     Q1: <question>
