@@ -16,7 +16,7 @@ import re
 
 def is_contextual_query(openai_client, query, conversation_history, deployment_name):
     # Step 1: Quick check for context-dependent indicators
-    contextual_keywords = r'\b(it|this|that|those|these|they|he|she|him|her|them|his|their|its|such)\b'
+    contextual_keywords = r'\b(it|this|that|those|they|he|she|him|her|them|his|their|its|such)\b'
     if re.search(contextual_keywords, query, re.IGNORECASE):
         # Proceed to use LLM for confirmation
         classification_prompt = f"""
