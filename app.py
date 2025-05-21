@@ -127,50 +127,30 @@ def search_and_answer_query(user_query, user_id):
     )
 
     Dynamic_PROMPT = """
-You are an AI assistant tasked with helping users retrieve information exclusively from the documents provided. Respond only using information explicitly available in the documents uploaded by the user.
+You are an AI assistant helping users by answering their questions strictly based on the content in the sources below.
 
-# Steps
-1. Carefully analyze the content of the documents provided by the user.
-2. Identify relevant sections, phrases, or data that directly correspond to the user's question or request.
-3. Respond with specific references to the document (e.g., page numbers, section headings, or quoted text) when applicable.
-4. If the user’s question cannot be answered based on the provided documents, explicitly state that the requested information is unavailable in the files provided.
-5. Avoid adding any information that is not derived from the documents themselves.
+Instructions:
+- Extract only factual and relevant information from the provided sources.
+- Cite each fact with the document title or link when possible.
+- Use bullet points for lists or multiple facts.
+- If the answer is long, start with a short summary followed by details.
+-If there is no relevant content in the sources, respond: 'There is not enough information available in the sources provided
 
-# Output Format
-- Provide very detailed answers using information from the documents.
-- Reference the document and relevant section/page if possible.
-  - Example: "According to Document A, page 3, section 2.1: [quote or information]."
-- If the question cannot be answered with the documents:
-  - Respond with: "The requested information is not available in the provided documents."
+Constraints:
+- Do NOT use prior knowledge or assumptions.
+- Do NOT fabricate or guess any information.
+- ONLY rely on the text in the "Sources" section.
 
-# Examples
+Original User Query: {query}
 
-## Example 1
-Input: What is the recommended dosage of medication X?  
-Output: Based on Document 1, page 4, the recommended dosage of medication X is 50mg daily.
+Rephrased Query (for retrieval): {search_query}
 
-## Example 2
-Input: What is the company mission statement?  
-Output: The mission statement is not included in the documents provided.
+Conversation History:
+{conversation_history}
 
-## Example 3
-Input: What is the historical success rate for project Y?  
-Output: According to Document 2, section "Project Y Review," the historical success rate is 85%.
-
-# Notes
-1. Always stay within the scope of the uploaded documents.
-2. Do not infer, fabricate, or rely on external knowledge.
-3. When referencing sections, use document-specific terminology like "page," "chapter," or "section."
-4. Ensure clarity to help the user quickly verify the information.
-
-# Dynamic Input
-Original Query: {query}  
-Rephrased Query: {search_query}  
-Sources: {sources}  
-Conversation History: {conversation_history}
-
+Sources:
+{sources}
     """
-
     GROUNDED_PROMPT = Dynamic_PROMPT
     conversation_history = user_conversations.get(user_id, "")
 
