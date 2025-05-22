@@ -155,10 +155,8 @@ Sources:
     conversation_history = user_conversations.get(user_id, "")
 
     # Detect if the query is contextual
-    if is_contextual_query(openai_client, user_query, conversation_history, deployment_name):
-        search_query = rephrase_query(openai_client, user_query, conversation_history, deployment_name)
-    else:
-        search_query = user_query
+
+    search_query = user_query
 
     # Generate intent from the search_query
     intent = generate_intent(openai_client, search_query, deployment_name)
