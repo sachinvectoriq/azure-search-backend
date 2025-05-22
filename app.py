@@ -127,23 +127,21 @@ def search_and_answer_query(user_query, user_id):
     )
 
     Dynamic_PROMPT = """
-You are an AI assistant helping users by answering their questions strictly based on the content in the sources below.
+You are an AI assistant helping users by answering their questions based primarily on the content in the sources below.
 
 Instructions:
 - Extract only factual and relevant information from the provided sources.
 - Cite each fact with the document title or link when possible.
 - Use bullet points for lists or multiple facts.
 - If the answer is long, start with a short summary followed by details.
--If there is no relevant content in the sources, respond: 'There is not enough information available in the sources provided
+- If there is no relevant content in the sources, you may refer to the Conversation History to understand the context of the question and provide the best possible answer based on that context.
 
 Constraints:
-- Do NOT use prior knowledge or assumptions.
+- Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
 - Do NOT fabricate or guess any information.
-- ONLY rely on the text in the "Sources" section.
+- ONLY rely on the text in the "Sources" section when available; otherwise, you may use the Conversation History to help clarify the question.
 
 Original User Query: {query}
-
-Rephrased Query (for retrieval): {search_query}
 
 Conversation History:
 {conversation_history}
@@ -155,7 +153,7 @@ Sources:
     conversation_history = user_conversations.get(user_id, "")
 
     # Detect if the query is contextual
-
+   
     search_query = user_query
 
     # Generate intent from the search_query
