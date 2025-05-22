@@ -78,13 +78,13 @@ Constraints:
 - Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
 - Do NOT fabricate or guess any information.
 
-Original User Query: {query}
-
 Conversation History:
 {conversation_history}
-
+---
 Sources:
 {sources}
+---
+User Question: {query}
     """
     GROUNDED_PROMPT = Dynamic_PROMPT
     conversation_history = user_conversations.get(user_id, "")
