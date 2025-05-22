@@ -87,6 +87,8 @@ Constraints:
 - Do NOT fabricate or guess any information.
 - ONLY rely on the text in the "Sources" section when available; otherwise, you may use the Conversation History to help clarify the question.
 
+At the end of your response, list the source filenames (or document titles) you used, like:
+Sources Used: [Document A, Document B]
 Original User Query: {query}
 
 Conversation History:
