@@ -14,58 +14,7 @@ user_conversations = {}
 
 import re
 
-def is_contextual_query(openai_client, query, conversation_history, deployment_name):
-    # Step 1: Quick check for context-dependent indicators
-    contextual_keywords = r'\b(it|this|that|those|they|he|she|him|her|them|his|their|its|such)\b'
-    if re.search(contextual_keywords, query, re.IGNORECASE):
-        # Proceed to use LLM for confirmation
-        classification_prompt = f"""
-        Determine if the following query depends on previous conversation context or is self-sufficient.
 
-        Conversation:
-        {conversation_history}
-
-        Query:
-        {query}
-
-        Respond with only one word: "Contextual" or "Independent"
-        """
-        classification_response = openai_client.chat.completions.create(
-            messages=[{"role": "user", "content": classification_prompt}],
-            model=deployment_name
-        )
-        result = classification_response.choices[0].message.content.strip()
-        return result.lower() == "contextual"
-
-    # If no contextual keywords, assume it's independent
-    return False
-
-
-# New function: Rephrase query if needed
-def rephrase_query(openai_client, query, conversation_history, deployment_name):
-    rephrase_prompt = f"""
-Instruction:
-To rewrite the user's latest query as a fully self-contained question, analyze the recent conversation. 
-
-1. If the latest query contains a pronoun (e.g., it, this, that, those, these, they, he, she, him, her, them, his, their, its, such), examine the immediately **preceding user query** for context.
-2. If that preceding query also contains a pronoun, continue going backward in the conversation history **until you find the most recent question without a pronoun**.
-3. Use that question as context to resolve the pronoun and rewrite the latest query in a complete, standalone form.
-4. If no previous context is needed (i.e., the latest query has no pronouns), simply return the query unchanged.
-
-Conversation:
-{conversation_history}
-
-Original Query:
-{query}
-
-Rephrased Query:
-"""
-
-    rephrase_response = openai_client.chat.completions.create(
-        messages=[{"role": "user", "content": rephrase_prompt}],
-        model=deployment_name
-    )
-    return rephrase_response.choices[0].message.content.strip()
 
 
 
@@ -124,13 +73,10 @@ Instructions:
 - Cite each fact with the document title or link when possible.
 - Use bullet points for lists or multiple facts.
 - If the answer is long, start with a short summary followed by details.
-- If there is no relevant content in the sources, you may refer to the Conversation History to understand the context of the question and provide the best possible answer based on that context.
 
 Constraints:
- -If the "Sources" are empty or do not contain any relevant information, ONLY THEN refer to the "Conversation History."
 - Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
 - Do NOT fabricate or guess any information.
-- ONLY rely on the text in the "Sources" section when available; otherwise, you may use the Conversation History to help clarify the question.
 
 Original User Query: {query}
 
