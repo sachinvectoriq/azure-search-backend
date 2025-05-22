@@ -67,17 +67,7 @@ Rephrased Query:
     )
     return rephrase_response.choices[0].message.content.strip()
 
-def generate_intent(openai_client, query, deployment_name):
-    intent_prompt = [
-        {"role": "system", "content": "You are an assistant that generates a concise intent phrase from user queries."},
-        {"role": "user", "content": f"Generate a concise intent phrase summarizing this query:\n\n{query}"}
-    ]
-    intent_response = openai_client.chat.completions.create(
-        messages=intent_prompt,
-        model=deployment_name
-    )
-    intent = intent_response.choices[0].message.content.strip()
-    return intent
+
 
 def safe_base64_decode(data):
     if data.startswith("https"):
@@ -134,10 +124,10 @@ Instructions:
 - Cite each fact with the document title or link when possible.
 - Use bullet points for lists or multiple facts.
 - If the answer is long, start with a short summary followed by details.
-- If no relevant content related to the user's query is found in the sources, you may then refer to the Conversation History to understand the context and provide the best possible answer.
-- Sources should be referred first at all times if no relevant information then only refer  Conversation History
+- If there is no relevant content in the sources, you may refer to the Conversation History to understand the context of the question and provide the best possible answer based on that context.
 
 Constraints:
+ -If the "Sources" are empty or do not contain any relevant information, ONLY THEN refer to the "Conversation History."
 - Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
 - Do NOT fabricate or guess any information.
 - ONLY rely on the text in the "Sources" section when available; otherwise, you may use the Conversation History to help clarify the question.
@@ -157,12 +147,10 @@ Sources:
    
     search_query = user_query
 
-    # Generate intent from the search_query
-    intent = generate_intent(openai_client, search_query, deployment_name)
-    print(f"[Intent Generated]: {intent}")
+
 
     # Create vector query using the intent
-    vector_query = VectorizableTextQuery(text=intent, k_nearest_neighbors=5, fields="text_vector")
+    vector_query = VectorizableTextQuery(text=search_query, k_nearest_neighbors=5, fields="text_vector")
     search_results = search_client.search(
     search_text=search_query,
     vector_queries=[vector_query],
@@ -199,6 +187,7 @@ Sources:
         sources=sources_formatted,
         conversation_history=conversation_history
     )
+     
 
     response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
