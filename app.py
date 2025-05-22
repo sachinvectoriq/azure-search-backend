@@ -134,7 +134,7 @@ Instructions:
 - Cite each fact with the document title or link when possible.
 - Use bullet points for lists or multiple facts.
 - If the answer is long, start with a short summary followed by details.
-- If there is no relevant content in the sources, you may refer to the Conversation History to understand the context of the question and provide the best possible answer based on that context.
+- If and only if no relevant content related to the user's query is found in the sources, you may then refer to the Conversation History to understand the context and provide the best possible answer.
 
 Constraints:
 - Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
