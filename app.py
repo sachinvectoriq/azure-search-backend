@@ -1,46 +1,33 @@
 from flask import Flask, request, jsonify
 import base64
 import json
+import re
 from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizableTextQuery
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import AzureOpenAI
-import re
 
 app = Flask(__name__)
 
-# In-memory dictionary to hold the full conversation for each user
+# In-memory dictionary to hold conversation context per user
 user_conversations = {}
-
-import re
-
-
-
-
 
 def safe_base64_decode(data):
     if data.startswith("https"):
         return data
-
     try:
         valid_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
         data = data.rstrip()
-
         while data and data[-1] not in valid_chars:
             data = data[:-1]
-
         while len(data) % 4 == 1:
             data = data[:-1]
-
         missing_padding = len(data) % 4
         if missing_padding:
             data += '=' * (4 - missing_padding)
-
         decoded = base64.b64decode(data).decode("utf-8", errors="ignore")
-
         decoded = decoded.strip().rstrip("\uFFFD").rstrip("?").strip()
         decoded = re.sub(r'\.(docx|pdf|pptx|xlsx)[0-9]+$', r'.\1', decoded, flags=re.IGNORECASE)
-
         return decoded
     except Exception as e:
         return f"[Invalid Base64] {data} - {str(e)}"
@@ -65,6 +52,21 @@ def search_and_answer_query(user_query, user_id):
         credential=credential
     )
 
+    # Initialize user context
+    if user_id not in user_conversations:
+        user_conversations[user_id] = {"history": [], "chat": ""}
+
+    # Maintain last 3 queries for search
+    user_conversations[user_id]["history"].append(user_query)
+    if len(user_conversations[user_id]["history"]) > 3:
+        user_conversations[user_id]["history"] = user_conversations[user_id]["history"][-3:]
+
+    # Use last 3 queries combined for search query
+    search_query = " ".join(user_conversations[user_id]["history"])
+
+    # Full conversation history for prompt context
+    conversation_history = user_conversations[user_id]["chat"]
+
     Dynamic_PROMPT = """
 You are an AI assistant helping users by answering their questions based primarily on the content in the sources below.
 
@@ -88,26 +90,17 @@ Sources:
 User Question: {query}
     """
     GROUNDED_PROMPT = Dynamic_PROMPT
-    conversation_history = user_conversations.get(user_id, "")
 
-    # Detect if the query is contextual
-   
-    search_query = user_query
-
-
-
-    # Create vector query using the intent
+    # Perform vector search
     vector_query = VectorizableTextQuery(text=search_query, k_nearest_neighbors=5, fields="text_vector")
     search_results = search_client.search(
-    search_text=search_query,
-    vector_queries=[vector_query],
-    select=["title", "chunk", "parent_id"],
-    top=5,  # increase the number of results
-    semantic_configuration_name="index-obe-final-semantic-configuration",
-    query_type="semantic",          # enable semantic ranking          # enable extractive answers
-)
-
-
+        search_text=search_query,
+        vector_queries=[vector_query],
+        select=["title", "chunk", "parent_id"],
+        top=7,
+        semantic_configuration_name="index-obe-final-semantic-configuration",
+        query_type="semantic"
+    )
 
     chunks_json = []
     sources_list = []
@@ -128,34 +121,35 @@ User Question: {query}
 
     sources_formatted = "\n=================\n".join(sources_list)
 
+    # Format final prompt
     prompt = GROUNDED_PROMPT.format(
         query=user_query,
         search_query=search_query,
         sources=sources_formatted,
         conversation_history=conversation_history
     )
-     
 
+    # Get answer from Azure OpenAI
     response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
-        temperature=0.8 
+        temperature=0.8
     )
 
     ai_response = response.choices[0].message.content
-    updated_conversation = conversation_history + f"\nUser: {user_query}\nAI: {ai_response}"
-    user_conversations[user_id] = updated_conversation
+    user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
+    # Generate follow-up questions
     follow_up_prompt = f"""
-    Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
-    Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
+Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
+Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
 
-    Format the response as:
-    Q1: <question>
-    Q2: ...
+Format the response as:
+Q1: <question>
+Q2: ...
 
-    SOURCES:
-    {sources_formatted}
+SOURCES:
+{sources_formatted}
     """
 
     follow_up_response = openai_client.chat.completions.create(
