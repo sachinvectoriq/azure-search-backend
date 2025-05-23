@@ -50,7 +50,7 @@ def search_and_answer_query(user_query, user_id):
     token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
 
     AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
-    index_name = "index-obe"
+    index_name = "index-obe-final"
     deployment_name = "ocm-gpt-4o"
 
     openai_client = AzureOpenAI(
@@ -103,7 +103,7 @@ User Question: {query}
     vector_queries=[vector_query],
     select=["title", "chunk", "parent_id"],
     top=5,  # increase the number of results
-    semantic_configuration_name="index-obe-semantic-configuration",
+    semantic_configuration_name="index-obe-final-semantic-configuration",
     query_type="semantic",          # enable semantic ranking          # enable extractive answers
 )
 
