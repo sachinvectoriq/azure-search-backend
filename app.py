@@ -68,23 +68,36 @@ def search_and_answer_query(user_query, user_id):
     conversation_history = user_conversations[user_id]["chat"]
 
     Dynamic_PROMPT = """
-You are an AI assistant helping users by answering their questions based primarily on the content in the sources below.
+You are an AI assistant helping users by answering their questions based only on the content in the sources below.
 
 Instructions:
 - Extract only factual and relevant information from the provided sources.
-- Cite each fact clearly using the document title (e.g., *"Source Title"* or `[Source Title]`).
+- Cite each fact clearly using the document title (e.g., [Document Title]).
+- After each answer or section, include the exact piece(s) of raw source text used to derive the answer.
+- Always wrap raw text excerpts in a clearly marked section titled "Referenced Source Excerpts".
 - Use bullet points for lists or multiple facts.
 - If the answer is long, start with a short summary followed by details.
 
 Citation Format:
 - Use square brackets to cite sources: [Document Title].
-- If the source has a link, you may include it like this: [Document Title](https://example.com).
-- Do NOT use numbering like [1], [2] unless the documents are explicitly numbered in the input.
+- If the source has a link, include it like this: [Document Title](https://example.com).
+- Do NOT use numeric citations like [1], [2] unless documents are explicitly numbered.
 
 Constraints:
 - Do NOT use prior knowledge or assumptions unrelated to the sources.
 - Do NOT fabricate or guess any information.
-- Do NOT cite sources that were not used for a given fact.
+- Do NOT cite sources that were not used.
+- Do NOT modify raw source text excerpts; quote them exactly as they appear.
+
+Format Example:
+
+Answer:
+- Fact or insight A [Document Title]
+- Fact or insight B [Document Title]
+
+Referenced Source Excerpts:
+- "Quoted raw text related to A" – [Document Title]
+- "Quoted raw text related to B" – [Document Title]
 
 Conversation History:
 {conversation_history}
@@ -93,6 +106,7 @@ Sources:
 {sources}
 ---
 User Question: {query}
+
 
     """
     GROUNDED_PROMPT = Dynamic_PROMPT
