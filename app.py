@@ -79,11 +79,11 @@ def search_and_answer_query(user_query, user_id):
         chunk = doc.get("chunk", "N/A")
         parent_id_encoded = doc.get("parent_id", "Unknown Document")
         parent_id_decoded = safe_base64_decode(parent_id_encoded)
-
+        cleaned_chunk = chunk.replace("\n", " ").replace("\t", " ").strip()
         chunks_json.append({
             "id": i,
             "title": title,
-            "chunk": chunk,
+            "chunk": cleaned_chunk,  # ✅ fixed circular reference
             "parent_id": parent_id_decoded
         })
 
@@ -128,7 +128,7 @@ Respond with:
 
     full_reply = response.choices[0].message.content
 
-    # Split AI response and citations (must end with a JSON list of numbers)
+    # Split AI response and citations
     match = re.search(r"(.*?)(\[\s*\d[\d\s,]*\])\s*$", full_reply.strip(), re.DOTALL)
     if match:
         ai_response = match.group(1).strip()
@@ -141,10 +141,30 @@ Respond with:
 
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
+    # Follow-up question generator
+    follow_up_prompt = f"""
+    Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
+    Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
+
+    Format the response as:
+    Q1: <question>
+    Q2: ...
+
+    SOURCES:
+    {sources_formatted}
+    """
+
+    follow_up_response = openai_client.chat.completions.create(
+        messages=[{"role": "user", "content": follow_up_prompt}],
+        model=deployment_name
+    )
+    follow_ups_raw = follow_up_response.choices[0].message.content
+
     return {
         "query": search_query,
         "ai_response": ai_response,
-        "citations": citations
+        "citations": citations,
+        "follow_ups": follow_ups_raw
     }
 
 @app.route("/ask", methods=["POST"])
