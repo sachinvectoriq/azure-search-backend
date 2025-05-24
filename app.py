@@ -77,7 +77,7 @@ Instructions:
 - If the answer is long, start with a short summary followed by details.
 
 Constraints:
-- Do NOT use prior knowledge or assumptions unrelated to the sources or conversation history.
+- Do NOT use prior knowledge or assumptions unrelated to the sources
 - Do NOT fabricate or guess any information.
 
 Conversation History:
