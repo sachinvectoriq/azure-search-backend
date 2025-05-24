@@ -8,8 +8,6 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import AzureOpenAI
 
 app = Flask(__name__)
-
-# In-memory dictionary to hold conversation context per user
 user_conversations = {}
 
 def safe_base64_decode(data):
@@ -52,64 +50,15 @@ def search_and_answer_query(user_query, user_id):
         credential=credential
     )
 
-    # Initialize user context
     if user_id not in user_conversations:
         user_conversations[user_id] = {"history": [], "chat": ""}
 
-    # Maintain last 3 queries for search
     user_conversations[user_id]["history"].append(user_query)
     if len(user_conversations[user_id]["history"]) > 3:
         user_conversations[user_id]["history"] = user_conversations[user_id]["history"][-3:]
 
-    # Use last 3 queries combined for search query
     search_query = " ".join(user_conversations[user_id]["history"])
-
-    # Full conversation history for prompt context
     conversation_history = user_conversations[user_id]["chat"]
-
-    Dynamic_PROMPT = """
-You are an AI assistant helping users by answering their questions based only on the content in the sources below.
-
-Instructions:
-- Extract only factual and relevant information from the provided sources.
-- Cite each fact clearly using the document title (e.g., [Document Title]).
-- After each answer or section, include the exact piece(s) of raw source text used to derive the answer.
-- Always wrap raw text excerpts in a clearly marked section titled "Referenced Source Excerpts".
-- Use bullet points for lists or multiple facts.
-- If the answer is long, start with a short summary followed by details.
-
-Citation Format:
-- Use square brackets to cite sources: [Document Title].
-- If the source has a link, include it like this: [Document Title](https://example.com).
-- Do NOT use numeric citations like [1], [2] unless documents are explicitly numbered.
-
-Constraints:
-- Do NOT use prior knowledge or assumptions unrelated to the sources.
-- Do NOT fabricate or guess any information.
-- Do NOT cite sources that were not used.
-- Do NOT modify raw source text excerpts; quote them exactly as they appear.
-
-Format Example:
-
-Answer:
-- Fact or insight A [Document Title]
-- Fact or insight B [Document Title]
-
-Referenced Source Excerpts:
-- "Quoted raw text related to A" – [Document Title]
-- "Quoted raw text related to B" – [Document Title]
-
-Conversation History:
-{conversation_history}
----
-Sources:
-{sources}
----
-User Question: {query}
-
-
-    """
-    GROUNDED_PROMPT = Dynamic_PROMPT
 
     # Perform vector search
     vector_query = VectorizableTextQuery(text=search_query, k_nearest_neighbors=5, fields="text_vector")
@@ -125,65 +74,77 @@ User Question: {query}
     chunks_json = []
     sources_list = []
 
-    for doc in search_results:
+    for i, doc in enumerate(search_results, start=1):
         title = doc.get("title", "N/A")
         chunk = doc.get("chunk", "N/A")
         parent_id_encoded = doc.get("parent_id", "Unknown Document")
         parent_id_decoded = safe_base64_decode(parent_id_encoded)
 
         chunks_json.append({
+            "id": i,
             "title": title,
             "chunk": chunk,
             "parent_id": parent_id_decoded
         })
 
-        sources_list.append(f'DOCUMENT: {parent_id_decoded}, TITLE: {title}, CONTENT: {chunk}')
+        sources_list.append(f"[{i}] DOCUMENT: {parent_id_decoded}, TITLE: {title}, CONTENT: {chunk}")
 
-    sources_formatted = "\n=================\n".join(sources_list)
+    sources_formatted = "\n\n".join(sources_list)
 
-    # Format final prompt
-    prompt = GROUNDED_PROMPT.format(
-        query=user_query,
-        search_query=search_query,
+    prompt_template = """
+You are an AI assistant. Answer the user query using only the sources listed below.
+
+Guidelines:
+- Extract only factual information from the chunks.
+- Use references like [1], [2], etc. based on the numbered chunks.
+- Do not add information not present in the sources.
+- Summarize briefly if needed, followed by details.
+- Only cite sources that directly contributed to the answer.
+
+Conversation History:
+{conversation_history}
+
+Sources:
+{sources}
+
+User Question: {query}
+
+Respond with:
+- Answer with citations like [1], [2] wherever applicable.
+- Then give a JSON list of only the used source numbers like: [1, 3]
+    """
+
+    prompt = prompt_template.format(
+        conversation_history=conversation_history,
         sources=sources_formatted,
-        conversation_history=conversation_history
+        query=user_query
     )
 
-    # Get answer from Azure OpenAI
     response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
-        temperature=0.8
+        temperature=0.7
     )
 
-    ai_response = response.choices[0].message.content
+    full_reply = response.choices[0].message.content
+
+    # Split AI response and citations (must end with a JSON list of numbers)
+    match = re.search(r"(.*?)(\[\s*\d[\d\s,]*\])\s*$", full_reply.strip(), re.DOTALL)
+    if match:
+        ai_response = match.group(1).strip()
+        used_ids = json.loads(match.group(2))
+    else:
+        ai_response = full_reply.strip()
+        used_ids = []
+
+    citations = [chunk for chunk in chunks_json if chunk["id"] in used_ids]
+
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
-
-    # Generate follow-up questions
-    follow_up_prompt = f"""
-Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
-Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
-
-Format the response as:
-Q1: <question>
-Q2: ...
-
-SOURCES:
-{sources_formatted}
-    """
-
-    follow_up_response = openai_client.chat.completions.create(
-        messages=[{"role": "user", "content": follow_up_prompt}],
-        model=deployment_name
-    )
-
-    follow_ups_raw = follow_up_response.choices[0].message.content
 
     return {
         "query": search_query,
-        "chunks": chunks_json,
         "ai_response": ai_response,
-        "follow_ups": follow_ups_raw
+        "citations": citations
     }
 
 @app.route("/ask", methods=["POST"])
