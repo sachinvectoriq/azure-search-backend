@@ -100,6 +100,7 @@ Guidelines:
 - Do not add information not present in the sources.
 - Summarize briefly if needed, followed by details.
 - Use bullet points for lists or multiple facts.
+- Use bold text for tittle and important words.
 - If the answer is long, start with a short summary followed by details.
 - Only cite sources that directly contributed to the answer.
 
