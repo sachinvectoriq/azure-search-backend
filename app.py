@@ -98,7 +98,7 @@ Guidelines:
 - Extract only factual information from the chunks.
 - Use references like [1], [2], etc. based on the numbered chunks.
 - Do not add information not present in the sources.
-- Summarize briefly if needed, followed by details.
+- Summarize briefly if needed, followed by details.Use bold text for titles and important words
 - Only cite sources that directly contributed to the answer.
 
 Conversation History:
