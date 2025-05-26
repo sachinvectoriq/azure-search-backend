@@ -30,6 +30,28 @@ def safe_base64_decode(data):
     except Exception as e:
         return f"[Invalid Base64] {data} - {str(e)}"
 
+def is_contextual_question(current_query, history, openai_client, deployment_name):
+    history_text = "\n".join(history[-2:]) if history else "No previous queries."
+    prompt = f"""
+You are a helpful assistant that decides whether a user query is contextual.
+
+Determine if the current query depends on previous conversation queries.
+Answer only "Yes" or "No".
+
+Current query:
+\"\"\"{current_query}\"\"\"
+
+Previous queries:
+\"\"\"{history_text}\"\"\"
+"""
+    response = openai_client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model=deployment_name,
+        temperature=0
+    )
+    answer = response.choices[0].message.content.strip().lower()
+    return answer.startswith("yes")
+
 def search_and_answer_query(user_query, user_id):
     credential = DefaultAzureCredential()
     token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
@@ -57,7 +79,14 @@ def search_and_answer_query(user_query, user_id):
     if len(user_conversations[user_id]["history"]) > 3:
         user_conversations[user_id]["history"] = user_conversations[user_id]["history"][-3:]
 
-    search_query = " ".join(user_conversations[user_id]["history"])
+    # Decide if query is contextual or direct
+    is_contextual = is_contextual_question(user_query, user_conversations[user_id]["history"][:-1], openai_client, deployment_name)
+
+    if is_contextual:
+        search_query = " ".join(user_conversations[user_id]["history"])
+    else:
+        search_query = user_query
+
     conversation_history = user_conversations[user_id]["chat"]
 
     # Perform vector search
@@ -76,28 +105,25 @@ def search_and_answer_query(user_query, user_id):
 
     for i, doc in enumerate(search_results, start=1):
         title = doc.get("title", "N/A")
-        chunk_content = doc.get("chunk", "N/A")  # Renamed from 'chunk' to avoid confusion
+        chunk_content = doc.get("chunk", "N/A")
         parent_id_encoded = doc.get("parent_id", "Unknown Document")
         parent_id_decoded = safe_base64_decode(parent_id_encoded)
         cleaned_chunk_content = chunk_content.replace("\n", " ").replace("\t", " ").strip()
 
-        # Create an explicit ID for the chunk for the AI
-        current_chunk_id = i  # Or use doc["chunk_id"] if your search results have one
+        current_chunk_id = i
 
         chunks_json.append({
-            "id": current_chunk_id,  # This `id` will be used for citation
+            "id": current_chunk_id,
             "title": title,
             "chunk": cleaned_chunk_content,
             "parent_id": parent_id_decoded
         })
 
-        # Make source formatting clear for AI and user.
-        # Emphasize the ID that the AI should use for citation.
         sources_list.append(
             f"Source ID: [{current_chunk_id}]\nContent: {cleaned_chunk_content}\nDocument: {parent_id_decoded}"
         )
 
-    sources_formatted = "\n\n---\n\n".join(sources_list)  # Use a clearer separator
+    sources_formatted = "\n\n---\n\n".join(sources_list)
 
     prompt_template = """
 You are an AI assistant. Answer the user query using only the sources listed below.
@@ -142,7 +168,7 @@ Respond with:
 
     citations = [chunk for chunk in chunks_json if chunk["id"] in used_ids]
 
-    # Append this Q&A to conversation chat history for context in next queries
+    # Append this Q&A to conversation chat history
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
     # Generate follow-up questions strictly based on source chunks
