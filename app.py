@@ -83,11 +83,12 @@ def search_and_answer_query(user_query, user_id):
         chunks_json.append({
             "id": i,
             "title": title,
-            "chunk": cleaned_chunk,  # ✅ fixed circular reference
+            "chunk": cleaned_chunk,
             "parent_id": parent_id_decoded
         })
 
-        sources_list.append(f"[{i}] DOCUMENT: {parent_id_decoded}, TITLE: {title}, CONTENT: {chunk}")
+        # Make source formatting clear for AI and user
+        sources_list.append(f"[{i}] TITLE: {title}\nCONTENT: {cleaned_chunk}\nDOC: {parent_id_decoded}")
 
     sources_formatted = "\n\n".join(sources_list)
 
@@ -96,7 +97,7 @@ You are an AI assistant. Answer the user query using only the sources listed bel
 
 Guidelines:
 - Extract only factual information from the chunks.
-- Use references like [1], [2], etc. based on the numbered chunks.
+- Use references like [1], [2], etc. immediately after facts you state.
 - Do not add information not present in the sources.
 - Summarize briefly if needed, followed by details.
 - Only cite sources that directly contributed to the answer.
@@ -110,8 +111,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- Answer with citations like [1], [2] wherever applicable.
-- Then give a JSON list of only the used source numbers like: [1, 3]
+- An answer citing sources inline like [1], [2].
     """
 
     prompt = prompt_template.format(
@@ -126,39 +126,38 @@ Respond with:
         temperature=0.7
     )
 
-    full_reply = response.choices[0].message.content
+    full_reply = response.choices[0].message.content.strip()
 
-    # Split AI response and citations
-    match = re.search(r"(.*?)(\[\s*\d[\d\s,]*\])\s*$", full_reply.strip(), re.DOTALL)
-    if match:
-        ai_response = match.group(1).strip()
-        used_ids = json.loads(match.group(2))
-    else:
-        ai_response = full_reply.strip()
-        used_ids = []
+    # Extract used citation IDs by finding all [number] patterns in AI's response
+    used_ids = list(set(map(int, re.findall(r"\[(\d+)\]", full_reply))))
+    # Remove citations from answer text if you want clean answer without trailing citation list
+    ai_response = full_reply
 
     citations = [chunk for chunk in chunks_json if chunk["id"] in used_ids]
 
+    # Append this Q&A to conversation chat history for context in next queries
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
-    # Follow-up question generator
+    # Generate follow-up questions strictly based on source chunks
     follow_up_prompt = f"""
-    Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
-    Only use the content in the sources. Do not invent new facts, but you must generate 3 questions based on any content available. If the source is completely empty or irrelevant, then and only then say "Not enough data" for all questions.
+Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
+Only use the content in the sources. Do not invent new facts, but generate 3 questions based on any content available.
+If the source is completely empty or irrelevant, respond "Not enough data" for all questions.
 
-    Format the response as:
-    Q1: <question>
-    Q2: ...
+Format:
+Q1: <question>
+Q2: <question>
+Q3: <question>
 
-    SOURCES:
-    {sources_formatted}
+SOURCES:
+{sources_formatted}
     """
 
     follow_up_response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": follow_up_prompt}],
         model=deployment_name
     )
-    follow_ups_raw = follow_up_response.choices[0].message.content
+    follow_ups_raw = follow_up_response.choices[0].message.content.strip()
 
     return {
         "query": search_query,
