@@ -7,7 +7,7 @@ from azure.search.documents.models import VectorizableTextQuery
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import AzureOpenAI
 
-app = Flask(_name_)
+app = Flask(__name__)
 user_conversations = {}
 
 def safe_base64_decode(data):
@@ -98,7 +98,7 @@ Guidelines:
 - Extract only factual information from the chunks.
 - Use references like [1], [2], etc. based on the numbered chunks.
 - Do not add information not present in the sources.
-- Summarize briefly if needed, followed by details.Use bold text for titles and important words
+- Summarize briefly if needed, followed by details.
 - Only cite sources that directly contributed to the answer.
 
 Conversation History:
@@ -129,7 +129,7 @@ Respond with:
     full_reply = response.choices[0].message.content
 
     # Split AI response and citations
-    match = re.search(r"(.?)(\[\s\d[\d\s,]\])\s$", full_reply.strip(), re.DOTALL)
+    match = re.search(r"(.*?)(\[\s*\d[\d\s,]*\])\s*$", full_reply.strip(), re.DOTALL)
     if match:
         ai_response = match.group(1).strip()
         used_ids = json.loads(match.group(2))
@@ -180,5 +180,5 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     app.run(debug=True)
