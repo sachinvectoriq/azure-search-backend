@@ -88,7 +88,7 @@ def search_and_answer_query(user_query, user_id):
         })
 
         # Make source formatting clear for AI and user
-        sources_list.append(f"[{i}] TITLE: {title}\nCONTENT: {cleaned_chunk}\nDOC: {parent_id_decoded}")
+        sources_list.append(f"[{i}] {chunk.strip()} (Source: {parent_id_decoded})")
 
     sources_formatted = "\n\n".join(sources_list)
 
@@ -97,7 +97,8 @@ You are an AI assistant. Answer the user query using only the sources listed bel
 
 Guidelines:
 - Extract only factual information from the chunks.
-- Use references like [1], [2], etc. immediately after facts you state.
+- Each fact must be followed immediately by the citation in square brackets, e.g., [1]. Only use a number if it corresponds exactly to the chunk containing that fact.
+- Do not guess or cite a number that doesn't directly support the fact.
 - Do not add information not present in the sources.
 - Summarize briefly if needed, followed by details.
 - Only cite sources that directly contributed to the answer.
