@@ -111,7 +111,8 @@ User Question: {query}
 
 Respond with:
 - Answer with citations like [1], [2] wherever applicable.
-- Then give a JSON list of only the used source numbers like: [1, 3]
+- Then write this exactly "JSON list of used sources".
+- On the next line, provide a JSON array of only the source numbers used in the answer, e.g. [1, 3]
     """
 
     prompt = prompt_template.format(
