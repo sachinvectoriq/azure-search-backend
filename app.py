@@ -74,32 +74,30 @@ def search_and_answer_query(user_query, user_id):
     chunks_json = []
     sources_list = []
 
-    # In search_and_answer_query function, inside the loop:
-chunks_json = []
-sources_list = []
+    for i, doc in enumerate(search_results, start=1):
+        title = doc.get("title", "N/A")
+        chunk_content = doc.get("chunk", "N/A")  # Renamed from 'chunk' to avoid confusion
+        parent_id_encoded = doc.get("parent_id", "Unknown Document")
+        parent_id_decoded = safe_base64_decode(parent_id_encoded)
+        cleaned_chunk_content = chunk_content.replace("\n", " ").replace("\t", " ").strip()
 
-for i, doc in enumerate(search_results, start=1):
-    title = doc.get("title", "N/A")
-    chunk_content = doc.get("chunk", "N/A") # Renamed from 'chunk' to avoid confusion
-    parent_id_encoded = doc.get("parent_id", "Unknown Document")
-    parent_id_decoded = safe_base64_decode(parent_id_encoded)
-    cleaned_chunk_content = chunk_content.replace("\n", " ").replace("\t", " ").strip()
+        # Create an explicit ID for the chunk for the AI
+        current_chunk_id = i  # Or use doc["chunk_id"] if your search results have one
 
-    # Create an explicit ID for the chunk for the AI
-    current_chunk_id = i # Or use doc["chunk_id"] if your search results have one
+        chunks_json.append({
+            "id": current_chunk_id,  # This `id` will be used for citation
+            "title": title,
+            "chunk": cleaned_chunk_content,
+            "parent_id": parent_id_decoded
+        })
 
-    chunks_json.append({
-        "id": current_chunk_id, # This `id` will be used for citation
-        "title": title,
-        "chunk": cleaned_chunk_content,
-        "parent_id": parent_id_decoded
-    })
+        # Make source formatting clear for AI and user.
+        # Emphasize the ID that the AI should use for citation.
+        sources_list.append(
+            f"Source ID: [{current_chunk_id}]\nContent: {cleaned_chunk_content}\nDocument: {parent_id_decoded}"
+        )
 
-    # Make source formatting clear for AI and user.
-    # Emphasize the ID that the AI should use for citation.
-    sources_list.append(f"Source ID: [{current_chunk_id}]\nContent: {cleaned_chunk_content}\nDocument: {parent_id_decoded}")
-
-sources_formatted = "\n\n---\n\n".join(sources_list) # Use a clearer separator
+    sources_formatted = "\n\n---\n\n".join(sources_list)  # Use a clearer separator
 
     prompt_template = """
 You are an AI assistant. Answer the user query using only the sources listed below.
@@ -121,7 +119,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- - A clear, concise answer, meticulously citing 'Source IDs' inline like [1], [2], [1, 3].].
+- - A clear, concise answer, meticulously citing 'Source IDs' inline like [1], [2], [1, 3].
     """
 
     prompt = prompt_template.format(
@@ -140,7 +138,6 @@ Respond with:
 
     # Extract used citation IDs by finding all [number] patterns in AI's response
     used_ids = list(set(map(int, re.findall(r"\[(\d+)\]", full_reply))))
-    # Remove citations from answer text if you want clean answer without trailing citation list
     ai_response = full_reply
 
     citations = [chunk for chunk in chunks_json if chunk["id"] in used_ids]
@@ -174,7 +171,7 @@ SOURCES:
         "ai_response": ai_response,
         "citations": citations,
         "follow_ups": follow_ups_raw,
-         "chunks":sources_list
+        "chunks": sources_list
     }
 
 @app.route("/ask", methods=["POST"])
