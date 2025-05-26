@@ -119,7 +119,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- - A clear, concise answer, meticulously citing 'Source IDs' inline like [1], [2], [1, 3].
+- An answer citing sources inline like [1], [2]
     """
 
     prompt = prompt_template.format(
