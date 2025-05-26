@@ -66,7 +66,7 @@ def search_and_answer_query(user_query, user_id):
         search_text=search_query,
         vector_queries=[vector_query],
         select=["title", "chunk", "parent_id"],
-        top=7,
+        top=10,
         semantic_configuration_name="index-obe-final-semantic-configuration",
         query_type="semantic"
     )
