@@ -171,8 +171,7 @@ SOURCES:
         "ai_response": ai_response,
         "citations": citations,
         "follow_ups": follow_ups_raw,
-        "source": sources_list,
-        "chunks": chunks_json,
+        "chunks": sources_list
     }
 
 @app.route("/ask", methods=["POST"])
