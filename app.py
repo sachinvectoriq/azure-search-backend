@@ -74,23 +74,32 @@ def search_and_answer_query(user_query, user_id):
     chunks_json = []
     sources_list = []
 
-    for i, doc in enumerate(search_results, start=1):
-        title = doc.get("title", "N/A")
-        chunk = doc.get("chunk", "N/A")
-        parent_id_encoded = doc.get("parent_id", "Unknown Document")
-        parent_id_decoded = safe_base64_decode(parent_id_encoded)
-        cleaned_chunk = chunk.replace("\n", " ").replace("\t", " ").strip()
-        chunks_json.append({
-            "id": i,
-            "title": title,
-            "chunk": cleaned_chunk,
-            "parent_id": parent_id_decoded
-        })
+    # In search_and_answer_query function, inside the loop:
+chunks_json = []
+sources_list = []
 
-        # Make source formatting clear for AI and user
-        sources_list.append(f"[{i}] {chunk.strip()} (Source: {parent_id_decoded})")
+for i, doc in enumerate(search_results, start=1):
+    title = doc.get("title", "N/A")
+    chunk_content = doc.get("chunk", "N/A") # Renamed from 'chunk' to avoid confusion
+    parent_id_encoded = doc.get("parent_id", "Unknown Document")
+    parent_id_decoded = safe_base64_decode(parent_id_encoded)
+    cleaned_chunk_content = chunk_content.replace("\n", " ").replace("\t", " ").strip()
 
-    sources_formatted = "\n\n".join(sources_list)
+    # Create an explicit ID for the chunk for the AI
+    current_chunk_id = i # Or use doc["chunk_id"] if your search results have one
+
+    chunks_json.append({
+        "id": current_chunk_id, # This `id` will be used for citation
+        "title": title,
+        "chunk": cleaned_chunk_content,
+        "parent_id": parent_id_decoded
+    })
+
+    # Make source formatting clear for AI and user.
+    # Emphasize the ID that the AI should use for citation.
+    sources_list.append(f"Source ID: [{current_chunk_id}]\nContent: {cleaned_chunk_content}\nDocument: {parent_id_decoded}")
+
+sources_formatted = "\n\n---\n\n".join(sources_list) # Use a clearer separator
 
     prompt_template = """
 You are an AI assistant. Answer the user query using only the sources listed below.
@@ -112,7 +121,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- An answer citing sources inline like [1], [2].
+- - A clear, concise answer, meticulously citing 'Source IDs' inline like [1], [2], [1, 3].].
     """
 
     prompt = prompt_template.format(
@@ -164,7 +173,8 @@ SOURCES:
         "query": search_query,
         "ai_response": ai_response,
         "citations": citations,
-        "follow_ups": follow_ups_raw
+        "follow_ups": follow_ups_raw,
+         "chunks":sources_list
     }
 
 @app.route("/ask", methods=["POST"])
