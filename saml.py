@@ -32,10 +32,18 @@ def prepare_flask_request(request):
     }
 
 def saml_login(saml_path):
-    print('In SAML Login')
-    req = prepare_flask_request(request)
-    auth = init_saml_auth(req, saml_path)
-    return redirect(auth.login())
+    try:
+        print('In SAML Login')
+        req = prepare_flask_request(request)
+        print(f'Request Prepared: {req}')
+        auth = init_saml_auth(req, saml_path)
+        print('SAML Auth Initialized')
+        login_url = auth.login()
+        print(f'Redirecting to: {login_url}')
+        return redirect(login_url)
+    except Exception as e:
+        print(f'Error during SAML login: {str(e)}')
+        return f'Internal Server Error: {str(e)}', 500
 
 def saml_callback(saml_path):
     req = prepare_flask_request(request)
