@@ -88,12 +88,10 @@ def search_and_answer_query(user_query, user_id):
             )
         return chunks, sources
 
-    # First call: concatenated history (6 chunks)
-    # First call: concatenated history (6 chunks)
+    # First call: concatenated history (5 chunks)
     history_chunks, history_sources = fetch_chunks(history_queries, 5, 1)
-# Second call: standalone query (4 chunks)
+    # Second call: standalone query (5 chunks)
     standalone_chunks, standalone_sources = fetch_chunks(user_query, 5, 6)
-
 
     all_chunks = history_chunks + standalone_chunks
     all_sources = history_sources + standalone_sources
@@ -111,8 +109,6 @@ Guidelines:
 - Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
 - Do not add any information not explicitly present in the source chunks.
 - Provide a concise summary followed by supporting details.
-
-
 
 Conversation History:
 {conversation_history}
@@ -140,9 +136,37 @@ Respond with:
 
     full_reply = response.choices[0].message.content.strip()
 
-    used_ids = list(set(map(int, re.findall(r"\[(\d+)\]", full_reply))))
-    ai_response = full_reply
-    citations = [chunk for chunk in all_chunks if chunk["id"] in used_ids]
+    # Find original citation numbers from AI response
+    original_ids = list(map(int, re.findall(r"\[(\d+)\]", full_reply)))
+    unique_original_ids = []
+    for i in original_ids:
+        if i not in unique_original_ids:
+            unique_original_ids.append(i)
+
+    # Create mapping: old citation id -> new citation id (1, 2, 3, ...)
+    id_mapping = {old_id: new_id + 1 for new_id, old_id in enumerate(unique_original_ids)}
+
+    # Replace old citation IDs with new ones in the AI response text
+    def replace_citation_ids(text, mapping):
+        def repl(match):
+            old_num = int(match.group(1))
+            new_num = mapping.get(old_num, old_num)
+            return f"[{new_num}]"
+        return re.sub(r"\[(\d+)\]", repl, text)
+
+    ai_response = replace_citation_ids(full_reply, id_mapping)
+
+    # Remap citations and update their IDs to match new citation numbers in ai_response
+    citations = []
+    seen = set()
+    for old_id in unique_original_ids:
+        new_id = id_mapping[old_id]
+        for chunk in all_chunks:
+            if chunk["id"] == old_id and old_id not in seen:
+                seen.add(old_id)
+                updated_chunk = chunk.copy()
+                updated_chunk["id"] = new_id  # Update ID to match remapped citation
+                citations.append(updated_chunk)
 
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
@@ -170,8 +194,8 @@ SOURCES:
         "query": user_query,
         "ai_response": ai_response,
         "citations": citations,
-        "follow_ups": follow_ups_raw,
-        "chunks": all_sources
+        "follow_ups": follow_ups_raw
+        #"chunks": all_sources
     }
 
 @app.route("/ask", methods=["POST"])
