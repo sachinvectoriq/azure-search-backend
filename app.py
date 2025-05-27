@@ -111,7 +111,6 @@ Guidelines:
 - Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
 - Do not add any information not explicitly present in the source chunks.
 - Provide a concise summary followed by supporting details.
-- If the sources contain no relevant information to answer the question, respond with: "The requested information is not available in the retrieved data. Please try another query or topic."
 
 
 Conversation History:
