@@ -89,9 +89,11 @@ def search_and_answer_query(user_query, user_id):
         return chunks, sources
 
     # First call: concatenated history (6 chunks)
+    # First call: concatenated history (6 chunks)
     history_chunks, history_sources = fetch_chunks(history_queries, 6, 1)
-    # Second call: standalone query (3 chunks)
-    standalone_chunks, standalone_sources = fetch_chunks(user_query, 3, 7)
+# Second call: standalone query (4 chunks)
+    standalone_chunks, standalone_sources = fetch_chunks(user_query, 4, 7)
+
 
     all_chunks = history_chunks + standalone_chunks
     all_sources = history_sources + standalone_sources
