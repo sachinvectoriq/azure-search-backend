@@ -30,28 +30,6 @@ def safe_base64_decode(data):
     except Exception as e:
         return f"[Invalid Base64] {data} - {str(e)}"
 
-def is_contextual_question(current_query, history, openai_client, deployment_name):
-    history_text = "\n".join(history[-2:]) if history else "No previous queries."
-    prompt = f"""
-You are a helpful assistant that decides whether a user query is contextual.
-
-Determine if the current query depends on previous conversation queries.
-Answer only "Yes" or "No".
-
-Current query:
-\"\"\"{current_query}\"\"\"
-
-Previous queries:
-\"\"\"{history_text}\"\"\"
-"""
-    response = openai_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model=deployment_name,
-        temperature=0
-    )
-    answer = response.choices[0].message.content.strip().lower()
-    return answer.startswith("yes")
-
 def search_and_answer_query(user_query, user_id):
     credential = DefaultAzureCredential()
     token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
@@ -79,62 +57,58 @@ def search_and_answer_query(user_query, user_id):
     if len(user_conversations[user_id]["history"]) > 3:
         user_conversations[user_id]["history"] = user_conversations[user_id]["history"][-3:]
 
-    # Decide if query is contextual or direct
-    is_contextual = is_contextual_question(user_query, user_conversations[user_id]["history"][:-1], openai_client, deployment_name)
+    history_queries = " ".join(user_conversations[user_id]["history"])
 
-    if is_contextual:
-        search_query = " ".join(user_conversations[user_id]["history"])
-    else:
-        search_query = user_query
+    def fetch_chunks(query_text, k_value, start_index):
+        vector_query = VectorizableTextQuery(text=query_text, k_nearest_neighbors=5, fields="text_vector")
+        search_results = search_client.search(
+            search_text=query_text,
+            vector_queries=[vector_query],
+            select=["title", "chunk", "parent_id"],
+            top=k_value,
+            semantic_configuration_name="index-obe-final-semantic-configuration",
+            query_type="semantic"
+        )
+        chunks = []
+        sources = []
+        for i, doc in enumerate(search_results):
+            title = doc.get("title", "N/A")
+            chunk_content = doc.get("chunk", "N/A").replace("\n", " ").replace("\t", " ").strip()
+            parent_id_encoded = doc.get("parent_id", "Unknown Document")
+            parent_id_decoded = safe_base64_decode(parent_id_encoded)
+            chunk_id = start_index + i
+            chunks.append({
+                "id": chunk_id,
+                "title": title,
+                "chunk": chunk_content,
+                "parent_id": parent_id_decoded
+            })
+            sources.append(
+                f"Source ID: [{chunk_id}]\nContent: {chunk_content}\nDocument: {parent_id_decoded}"
+            )
+        return chunks, sources
+
+    # First call: concatenated history (6 chunks)
+    history_chunks, history_sources = fetch_chunks(history_queries, 6, 1)
+    # Second call: standalone query (3 chunks)
+    standalone_chunks, standalone_sources = fetch_chunks(user_query, 3, 7)
+
+    all_chunks = history_chunks + standalone_chunks
+    all_sources = history_sources + standalone_sources
+    sources_formatted = "\n\n---\n\n".join(all_sources)
 
     conversation_history = user_conversations[user_id]["chat"]
 
-    # Perform vector search
-    vector_query = VectorizableTextQuery(text=search_query, k_nearest_neighbors=5, fields="text_vector")
-    search_results = search_client.search(
-        search_text=search_query,
-        vector_queries=[vector_query],
-        select=["title", "chunk", "parent_id"],
-        top=10,
-        semantic_configuration_name="index-obe-final-semantic-configuration",
-        query_type="semantic"
-    )
-
-    chunks_json = []
-    sources_list = []
-
-    for i, doc in enumerate(search_results, start=1):
-        title = doc.get("title", "N/A")
-        chunk_content = doc.get("chunk", "N/A")
-        parent_id_encoded = doc.get("parent_id", "Unknown Document")
-        parent_id_decoded = safe_base64_decode(parent_id_encoded)
-        cleaned_chunk_content = chunk_content.replace("\n", " ").replace("\t", " ").strip()
-
-        current_chunk_id = i
-
-        chunks_json.append({
-            "id": current_chunk_id,
-            "title": title,
-            "chunk": cleaned_chunk_content,
-            "parent_id": parent_id_decoded
-        })
-
-        sources_list.append(
-            f"Source ID: [{current_chunk_id}]\nContent: {cleaned_chunk_content}\nDocument: {parent_id_decoded}"
-        )
-
-    sources_formatted = "\n\n---\n\n".join(sources_list)
-
+    # Modified prompt
     prompt_template = """
-You are an AI assistant. Answer the user query using only the sources listed below.
+You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
 
 Guidelines:
-- Extract only factual information from the chunks.
-- Each fact must be followed immediately by the citation in square brackets, e.g., [1]. Only use a number if it corresponds exactly to the chunk containing that fact.
-- Do not guess or cite a number that doesn't directly support the fact.
-- Do not add information not present in the sources.
-- Summarize briefly if needed, followed by details.
-- Only cite sources that directly contributed to the answer.
+- Focus your answer primarily on the chunk(s) that contain the most direct and complete answer.
+- Extract only factual information present in the chunks.
+- Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
+- Do not add any information not explicitly present in the source chunks.
+- Provide a concise summary followed by supporting details.
 
 Conversation History:
 {conversation_history}
@@ -145,7 +119,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- An answer citing sources inline like [1], [2]
+- An answer citing sources inline like [1], [2], especially where the answer is clearly supported.
     """
 
     prompt = prompt_template.format(
@@ -162,20 +136,16 @@ Respond with:
 
     full_reply = response.choices[0].message.content.strip()
 
-    # Extract used citation IDs by finding all [number] patterns in AI's response
     used_ids = list(set(map(int, re.findall(r"\[(\d+)\]", full_reply))))
     ai_response = full_reply
+    citations = [chunk for chunk in all_chunks if chunk["id"] in used_ids]
 
-    citations = [chunk for chunk in chunks_json if chunk["id"] in used_ids]
-
-    # Append this Q&A to conversation chat history
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
-    # Generate follow-up questions strictly based on source chunks
+    # Follow-up question generation
     follow_up_prompt = f"""
 Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
-Only use the content in the sources. Do not invent new facts, but generate 3 questions based on any content available.
-If the source is completely empty or irrelevant, respond "Not enough data" for all questions.
+Only use the content in the sources. Do not invent new facts.
 
 Format:
 Q1: <question>
@@ -193,11 +163,11 @@ SOURCES:
     follow_ups_raw = follow_up_response.choices[0].message.content.strip()
 
     return {
-        "query": search_query,
+        "query": user_query,
         "ai_response": ai_response,
         "citations": citations,
         "follow_ups": follow_ups_raw,
-        "chunks": sources_list
+        "chunks": all_sources
     }
 
 @app.route("/ask", methods=["POST"])
