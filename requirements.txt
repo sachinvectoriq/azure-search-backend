@@ -8,3 +8,4 @@ openai
 aiohttp
 ipywidgets
 ipykernel
+psycopg2==2.9.10
