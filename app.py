@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-
+from saml import saml_login, saml_callback, extract_token
 
 app = Flask(__name__)
 
@@ -11,15 +11,25 @@ def hello():
 
 
 
+
+# SAML routes
+@app.route('/saml/login')
+def login():
+    return saml_login(app.config["SAML_PATH"])
+
+@app.route('/saml/callback', methods=['POST'])
+def login_callback():
+    return saml_callback(app.config["SAML_PATH"])
+
+@app.route('/saml/token/extract', methods=['POST'])
+def func_get_data_from_token():
+    return extract_token()
+
+
 from search_query import ask
 @app.route('/ask', methods=['POST'])
 def call_ask():
     return ask()
-
-
-
-
-
 
 # from azaisearch_login_log import log_user
 # @app.route('/log/user', methods=['POST'])
