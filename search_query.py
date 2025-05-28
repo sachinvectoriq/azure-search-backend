@@ -172,7 +172,7 @@ Respond with:
 
     # Follow-up question generation
     follow_up_prompt = f"""
-Based strictly on the following chunks of source material, generate 3 follow-up questions the user might ask.
+Based only on the following chunks of source material, generate 3 follow-up questions the user might ask.
 Only use the content in the sources. Do not invent new facts.
 
 Format:
