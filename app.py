@@ -2,6 +2,8 @@ from flask import Flask, jsonify
 from saml import saml_login, saml_callback, extract_token
 
 app = Flask(__name__)
+app.config["SAML_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saml")
+app.config["SECRET_KEY"] = os.getenv('JWT_SECRET_KEY')
 
 
 
