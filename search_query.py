@@ -104,13 +104,11 @@ def search_and_answer_query(user_query, user_id):
 You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
 
 Guidelines:
-- Base your response strictly on the information provided in the chunks.
-- Focus on the chunks that offer the most direct and complete answer.
-- Present only factual information as given in the source chunks.
-- Cite each fact using the chunk ID in square brackets, e.g., [3].
-- Avoid speculation, opinions, or any content not present in the source.
-
-Provide a concise summary first, then any supporting details as needed.
+- Focus your answer primarily on the chunk(s) that contain the most direct and complete answer.
+- Extract only factual information present in the chunks.
+- Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
+- Do not add any information not explicitly present in the source chunks.
+- Provide a concise summary followed by supporting details.
 
 Conversation History:
 {conversation_history}
@@ -121,7 +119,7 @@ Sources:
 User Question: {query}
 
 Respond with:
-- A fact-based answer with proper inline citations like [1], [2].
+- An answer citing sources inline like [1], [2], especially where the answer is clearly supported.
 """
 
 
