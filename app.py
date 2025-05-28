@@ -1,5 +1,7 @@
 from flask import Flask, jsonify
 from saml import saml_login, saml_callback, extract_token
+import os
+
 
 app = Flask(__name__)
 app.config["SAML_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saml")
