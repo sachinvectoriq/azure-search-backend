@@ -101,14 +101,33 @@ def search_and_answer_query(user_query, user_id):
 
     # Modified prompt
     prompt_template = """
-You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
+You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query. Always follow the structure and formatting guidelines strictly.
 
+=========================
+Answer Format:
+=========================
+
+**Summary:**  
+Give a 2-3 line summary of the answer.
+
+**Detailed Answer:**  
+- Use clear bullet points or numbered steps.
+- Structure the response under relevant subheadings.
+- **Bold important keywords**, phrases, or technical terms.
+- Each fact **must be directly backed by a citation** in the format [<chunk_id>] — e.g., [2].
+
+**Conclusion:**  
+Wrap up the answer with a final key takeaway or suggestion.
+
+=========================
 Guidelines:
-- Focus your answer primarily on the chunk(s) that contain the most direct and complete answer.
-- Extract only factual information present in the chunks.
-- Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
-- Do not add any information not explicitly present in the source chunks.
-- Provide a concise summary followed by supporting details.
+=========================
+
+- Use only factual information directly from the provided source chunks.
+- Do NOT add any assumptions or invented details.
+- If a question cannot be answered directly from the sources, say: "**The answer is not explicitly mentioned in the provided sources.**"
+- Highlight key data points, definitions, and terms using **bold**.
+- Follow the format and structure exactly in every answer.
 
 Conversation History:
 {conversation_history}
@@ -117,9 +136,6 @@ Sources:
 {sources}
 
 User Question: {query}
-
-Respond with:
-- An answer citing sources inline like [1], [2], especially where the answer is clearly supported.
 """
 
 
@@ -182,7 +198,7 @@ Q2: <question>
 Q3: <question>
 
 SOURCES:
-{sources_formatted}
+{citations}
     """
 
     follow_up_response = openai_client.chat.completions.create(
