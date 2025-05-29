@@ -88,9 +88,9 @@ def search_and_answer_query(user_query, user_id):
             )
         return chunks, sources
 
-    # First call: concatenated history (5 chunks)
+    # First call: history
     history_chunks, history_sources = fetch_chunks(history_queries, 5, 1)
-    # Second call: standalone query (5 chunks)
+    # Second call: current query
     standalone_chunks, standalone_sources = fetch_chunks(user_query, 5, 6)
 
     all_chunks = history_chunks + standalone_chunks
@@ -99,7 +99,6 @@ def search_and_answer_query(user_query, user_id):
 
     conversation_history = user_conversations[user_id]["chat"]
 
-    # Modified prompt
     prompt_template = """
 You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
 
@@ -122,7 +121,6 @@ Respond with:
 - An answer citing sources inline like [1], [2], especially where the answer is clearly supported.
 """
 
-
     prompt = prompt_template.format(
         conversation_history=conversation_history,
         sources=sources_formatted,
@@ -137,27 +135,31 @@ Respond with:
 
     full_reply = response.choices[0].message.content.strip()
 
-    # Find original citation numbers from AI response
-    original_ids = list(map(int, re.findall(r"\[(\d+)\]", full_reply)))
+    # Standardize citation format: [1, 2] not [12] or [1,2]
+    original_ids = list(map(int, re.findall(r"\[(\d+(?:,\s*\d+)*?)\]", full_reply)))
+    flat_ids = []
+    for match in re.findall(r"\[(.*?)\]", full_reply):
+        parts = match.split(",")
+        for p in parts:
+            if p.strip().isdigit():
+                flat_ids.append(int(p.strip()))
+
     unique_original_ids = []
-    for i in original_ids:
+    for i in flat_ids:
         if i not in unique_original_ids:
             unique_original_ids.append(i)
 
-    # Create mapping: old citation id -> new citation id (1, 2, 3, ...)
     id_mapping = {old_id: new_id + 1 for new_id, old_id in enumerate(unique_original_ids)}
 
-    # Replace old citation IDs with new ones in the AI response text
     def replace_citation_ids(text, mapping):
         def repl(match):
-            old_num = int(match.group(1))
-            new_num = mapping.get(old_num, old_num)
-            return f"[{new_num}]"
-        return re.sub(r"\[(\d+)\]", repl, text)
+            nums = match.group(1).split(",")
+            new_nums = sorted(set(mapping.get(int(n.strip()), int(n.strip())) for n in nums if n.strip().isdigit()))
+            return f"[{', '.join(map(str, new_nums))}]"
+        return re.sub(r"\[(.*?)\]", repl, text)
 
     ai_response = replace_citation_ids(full_reply, id_mapping)
 
-    # Remap citations and update their IDs to match new citation numbers in ai_response
     citations = []
     seen = set()
     for old_id in unique_original_ids:
@@ -166,12 +168,11 @@ Respond with:
             if chunk["id"] == old_id and old_id not in seen:
                 seen.add(old_id)
                 updated_chunk = chunk.copy()
-                updated_chunk["id"] = new_id  # Update ID to match remapped citation
+                updated_chunk["id"] = new_id
                 citations.append(updated_chunk)
 
     user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
-    # Follow-up question generation
     follow_up_prompt = f"""
 Based only on the following chunks of source material, generate 3 follow-up questions the user might ask.
 Only use the content in the sources. Do not invent new facts.
@@ -196,7 +197,6 @@ SOURCES:
         "ai_response": ai_response,
         "citations": citations,
         "follow_ups": follow_ups_raw
-        #"chunks": all_sources
     }
 
 @app.route("/ask", methods=["POST"])
