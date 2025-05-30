@@ -45,6 +45,11 @@ from feedback import submit_feedback
 def call_submit_feedback():
     return submit_feedback()
 
+from logging_chat import log_query
+@app.route('/log', methods=['POST'])
+def call_log_query():
+    return log_query()
+
 
 
 if __name__ == "__main__":
