@@ -35,10 +35,10 @@ from search_query import ask
 def call_ask():
     return ask()
 
-# from azaisearch_login_log import log_user
-# @app.route('/log/user', methods=['POST'])
-# def call_log_user():
-#     return log_user()
+from user_login_log import log_user
+@app.route('/log/user', methods=['POST'])
+def call_log_user():
+    return log_user()
 
 from feedback import submit_feedback
 @app.route('/feedback', methods=['POST'])
