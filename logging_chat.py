@@ -20,7 +20,7 @@ def get_db_connection():
 def log_query():
     data = request.get_json()
 
-    required_fields = ["session_id", "user_id", "user_name", "query", "ai_response", "citations"]
+    required_fields = ["session_id", "user_id", "user_name", "query", "ai_response", "citations", "login_session_id"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing one or more required fields."}), 400
 
@@ -29,8 +29,8 @@ def log_query():
         cur = conn.cursor()
 
         insert_query = """
-            INSERT INTO azaisearch_logging (session_id, user_id, user_name, query, ai_response, citations)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO azaisearch_logging (session_id, user_id, user_name, query, ai_response, citations, login_session_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
 
         cur.execute(insert_query, (
@@ -39,7 +39,8 @@ def log_query():
             data["user_name"],
             data["query"],
             data["ai_response"],
-            data["citations"]
+            data["citations"],
+            data["login_session_id"]
         ))
 
         conn.commit()
