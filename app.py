@@ -50,6 +50,11 @@ from logging_chat import log_query
 def call_log_query():
     return log_query()
 
+from get_settings import get_settings
+@app.route('/get_settings', methods=['GET'])
+def call_get_settings():
+    return get_settings()
+
 
 
 if __name__ == "__main__":
