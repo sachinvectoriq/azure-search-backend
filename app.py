@@ -55,6 +55,11 @@ from get_settings import get_settings
 def call_get_settings():
     return get_settings()
 
+from update_settings import update_settings
+@app.route('/update_settings', methods=['POST'])
+def call_update_settings():
+    return update_settings()
+
 
 
 if __name__ == "__main__":
