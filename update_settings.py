@@ -29,9 +29,6 @@ def connect_db():
         print(f"Error connecting to the database: {e}")
         return None
 
-
-
-
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
     # Get admin_id from query parameters
@@ -42,17 +39,15 @@ def update_settings():
     # Get form data for columns to update
     update_fields = {}
     allowed_fields = [
-    'current_index_name',
-    'current_prompt',
-    'azure_search_endpoint',
-    'azure_search_api_key',
-    'azure_search_index_filter',
-    'openai_model',
-    'openai_model_temperature',
-    'openai_max_tokens',
-    'openai_top_p'
+        'azure_search_endpoint',
+        'azure_search_index_name',
+        'current_prompt',
+        'openai_model_deployment_name',
+        'openai_endpoint',
+        'openai_api_version',
+        'openai_model_temperature',
+        'semantic_configuration_name'
     ]
-
 
     for field in allowed_fields:
         value = request.form.get(field)
