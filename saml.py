@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 import jwt  # Import PyJWT for JWT operations
-from quart import session, redirect, request, jsonify # Changed from flask to quart
+from quart import session, redirect, request, jsonify, run_sync # Changed from flask to quart, added run_sync
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError  # Import JWT exceptions
 
@@ -69,14 +69,9 @@ async def saml_callback(saml_path):
     req = await prepare_quart_request(request)
     auth = init_saml_auth(req, saml_path)
 
-    # process_response can be blocking, so it should be awaited.
-    # OneLogin_Saml2_Auth's process_response is not inherently async,
-    # but in Quart's context, it should be treated as potentially blocking
-    # if it performs I/O, or wrapped if it's purely CPU-bound and long-running.
-    # For now, we assume it's fine to await directly if it's not truly blocking the event loop.
-    # If it causes blocking, you'd wrap it with await run_sync(auth.process_response)
-    auth.process_response() # This is the line that might still block if it does sync I/O.
-                            # If it causes issues, consider `await run_sync(auth.process_response)`
+    # Wrap the synchronous process_response call with run_sync to prevent blocking
+    # and ensure it runs correctly within Quart's async context.
+    await run_sync(auth.process_response)
 
     errors = auth.get_errors()
     group_name = 'user'
@@ -164,4 +159,3 @@ async def extract_token():
         return jsonify({"error": user_data}), 400
 
     return jsonify({"user_data": user_data}), 200
-
