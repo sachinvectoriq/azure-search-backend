@@ -22,16 +22,16 @@ async def hello():
 
 # ---- SAML routes ----
 @app.route('/saml/login')
-def login():
-    return saml_login(app.config["SAML_PATH"])
+async def login(): # Changed to async def
+    return await saml_login(app.config["SAML_PATH"]) # Added await
 
 @app.route('/saml/callback', methods=['POST'])
-def login_callback():
-    return saml_callback(app.config["SAML_PATH"])
+async def login_callback(): # Changed to async def
+    return await saml_callback(app.config["SAML_PATH"]) # Added await
 
 @app.route('/saml/token/extract', methods=['POST'])
-def func_get_data_from_token():
-    return extract_token()
+async def func_get_data_from_token(): # Changed to async def
+    return await extract_token() # Added await
 
 # ---- Async ask route ----
 @app.route('/ask', methods=['POST'])
