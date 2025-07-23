@@ -4,20 +4,20 @@ from saml import saml_login, saml_callback, extract_token
 import os
 
 # Import the refactored function
-from search_query import ask_query # Renamed to avoid conflict with route name
+from search_query import ask_query  # Renamed to avoid conflict with route name
 
 # --- In-memory store for conversation history (TEMPORARY - NOT for production) ---
 # This will not persist across restarts or multiple Flask processes/instances.
-user_conversations = {} # Define the single source of truth here
+user_conversations = {}  # Define the single source of truth here
 
 # Initialize Quart app
 app = Quart(__name__)
 app.config["SAML_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saml")
-app.config["SECRET_KEY"] = os.getenv('JWT_SECRET_KEY') # Replace with hardcoded key or securely read it, as you prefer.
+app.config["SECRET_KEY"] = os.getenv('JWT_SECRET_KEY')  # Replace with hardcoded key or securely read it, as you prefer.
 
 # ---- Basic route ----
 @app.route('/')
-def hello():
+async def hello():
     return 'Hello!'
 
 # ---- SAML routes ----
@@ -85,6 +85,4 @@ def ping():
 if __name__ == "__main__":
     # For local development, use uvicorn directly
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000) # Removed workers=1 for local dev simplicity
-                                              # As this is for local, you can omit workers
-                                              # or set to 1. For production, Gunicorn will manage.
+    uvicorn.run(app, host="0.0.0.0", port=5000)  # Removed workers=1 for local dev simplicity
