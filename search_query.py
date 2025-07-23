@@ -10,6 +10,27 @@ from openai import AzureOpenAI
 app = Flask(__name__)
 user_conversations = {}
 
+# === Global Initialization ===
+AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
+INDEX_NAME = "index-obe-final"
+DEPLOYMENT_NAME = "ocm-gpt-4o"
+AZURE_OPENAI_ENDPOINT = "https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/"
+
+credential = DefaultAzureCredential()
+token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
+
+openai_client = AzureOpenAI(
+    api_version="2025-01-01-preview",
+    azure_endpoint=AZURE_OPENAI_ENDPOINT,
+    azure_ad_token_provider=token_provider
+)
+
+search_client = SearchClient(
+    endpoint=AZURE_SEARCH_SERVICE,
+    index_name=INDEX_NAME,
+    credential=credential
+)
+
 def safe_base64_decode(data):
     if data.startswith("https"):
         return data
@@ -31,25 +52,6 @@ def safe_base64_decode(data):
         return f"[Invalid Base64] {data} - {str(e)}"
 
 def search_and_answer_query(user_query, user_id):
-    credential = DefaultAzureCredential()
-    token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
-
-    AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
-    index_name = "index-obe-final"
-    deployment_name = "ocm-gpt-4o"
-
-    openai_client = AzureOpenAI(
-        api_version="2025-01-01-preview",
-        azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
-        azure_ad_token_provider=token_provider
-    )
-
-    search_client = SearchClient(
-        endpoint=AZURE_SEARCH_SERVICE,
-        index_name=index_name,
-        credential=credential
-    )
-
     if user_id not in user_conversations:
         user_conversations[user_id] = {"history": [], "chat": ""}
 
@@ -129,13 +131,13 @@ Respond with:
 
     response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
-        model=deployment_name,
+        model=DEPLOYMENT_NAME,
         temperature=0.7
     )
 
     full_reply = response.choices[0].message.content.strip()
 
-    # Standardize citation format: [1, 2] not [12] or [1,2]
+    # Standardize citation format: [1, 2]
     original_ids = list(map(int, re.findall(r"\[(\d+(?:,\s*\d+)*?)\]", full_reply)))
     flat_ids = []
     for match in re.findall(r"\[(.*?)\]", full_reply):
@@ -188,7 +190,7 @@ SOURCES:
 
     follow_up_response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": follow_up_prompt}],
-        model=deployment_name
+        model=DEPLOYMENT_NAME
     )
     follow_ups_raw = follow_up_response.choices[0].message.content.strip()
 
