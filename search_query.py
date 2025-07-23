@@ -1,33 +1,27 @@
-# search_query.py
 import base64
 import json
 import re
-# No Quart import here!
-# No app = Quart(__name__) here!
 
-# Import asynchronous Azure SDK clients
-from azure.search.documents.aio import SearchClient as AsyncSearchClient # Use async clients!
+from azure.search.documents.aio import SearchClient as AsyncSearchClient
 from azure.search.documents.models import VectorizableTextQuery
 from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
-from openai import AsyncAzureOpenAI # Use async clients!
+from openai import AsyncAzureOpenAI
 
-# Global client initialization (these are fine here, as they are truly global singletons)
+# Global client initialization
 try:
     credential = AsyncDefaultAzureCredential()
-    # Note: get_bearer_token_provider is for sync clients. AsyncAzureOpenAI handles this with AsyncDefaultAzureCredential.
-    # token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default") # Remove this line
 
     AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
     index_name = "index-obe-final"
-    deployment_name = "ocm-gpt-4o" # Use a consistent variable name
+    deployment_name = "ocm-gpt-4o"
 
-    openai_client = AsyncAzureOpenAI( # Use AsyncAzureOpenAI
+    openai_client = AsyncAzureOpenAI(
         api_version="2025-01-01-preview",
         azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
         api_key="1inOabIDqV45oV8EyGXA4qGFqN3Ip42pqA5Qd9TAbJFgUdmTBQUPJQQJ99BCACHYHv6XJ3w3AAAAACOGuszT"
     )
 
-    search_client = AsyncSearchClient( # Use AsyncSearchClient
+    search_client = AsyncSearchClient(
         endpoint=AZURE_SEARCH_SERVICE,
         index_name=index_name,
         credential=credential
@@ -35,11 +29,9 @@ try:
 
 except Exception as e:
     print(f"Error initializing global clients in search_query.py: {e}")
-    # In a real app, you might want to raise an exception or log more robustly
-    exit(1) # Or handle gracefully
+    exit(1)
 
 def safe_base64_decode(data):
-    # ... (your existing safe_base64_decode function, no changes needed)
     if data.startswith("https"):
         return data
     try:
@@ -59,11 +51,7 @@ def safe_base64_decode(data):
     except Exception as e:
         return f"[Invalid Base64] {data} - {str(e)}"
 
-# This function should take user_conversations as an argument,
-# or user_conversations should be a shared, external state (e.g., Redis)
-# For now, let's assume it's passed in.
-async def ask_query(user_query, user_id, conversation_store): # Renamed to avoid confusion with route
-    # Retrieve conversation history from the passed-in dictionary
+async def ask_query(user_query, user_id, conversation_store):
     user_data = conversation_store.get(user_id)
     if user_data:
         conversation_history = user_data.get("chat", "")
@@ -80,7 +68,6 @@ async def ask_query(user_query, user_id, conversation_store): # Renamed to avoid
 
     async def fetch_chunks(query_text, k_value, start_index):
         vector_query = VectorizableTextQuery(text=query_text, k_nearest_neighbors=5, fields="text_vector")
-        # Use await with search_client.search as it's an async client now
         search_results = await search_client.search(
             search_text=query_text,
             vector_queries=[vector_query],
@@ -91,8 +78,8 @@ async def ask_query(user_query, user_id, conversation_store): # Renamed to avoid
         )
         chunks = []
         sources = []
-        # Iterate asynchronously over search_results
-        async for i, doc in enumerate(search_results):
+        i = 0
+        async for doc in search_results:
             title = doc.get("title", "N/A")
             chunk_content = doc.get("chunk", "N/A").replace("\n", " ").replace("\t", " ").strip()
             parent_id_encoded = doc.get("parent_id", "Unknown Document")
@@ -107,6 +94,7 @@ async def ask_query(user_query, user_id, conversation_store): # Renamed to avoid
             sources.append(
                 f"Source ID: [{chunk_id}]\nContent: {chunk_content}\nDocument: {parent_id_decoded}"
             )
+            i += 1
         return chunks, sources
 
     history_chunks, history_sources = await fetch_chunks(history_queries, 5, 1)
@@ -116,7 +104,6 @@ async def ask_query(user_query, user_id, conversation_store): # Renamed to avoid
     all_sources = history_sources + standalone_sources
     sources_formatted = "\n\n---\n\n".join(all_sources)
 
-    # Use conversation_history retrieved from the store
     prompt_template = """
 You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
 
@@ -145,7 +132,6 @@ Respond with:
         query=user_query
     )
 
-    # Use await with openai_client.chat.completions.create
     response = await openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
@@ -155,7 +141,7 @@ Respond with:
     full_reply = response.choices[0].message.content.strip()
 
     flat_ids = []
-    for match in re.findall(r"\[(.*?)\]", full_reply): # Fixed regex from \\[ to \[
+    for match in re.findall(r"\[(.*?)\]", full_reply):
         parts = match.split(",")
         for p in parts:
             if p.strip().isdigit():
@@ -173,7 +159,7 @@ Respond with:
             nums = match.group(1).split(",")
             new_nums = sorted(set(mapping.get(int(n.strip()), int(n.strip())) for n in nums if n.strip().isdigit()))
             return f"[{', '.join(map(str, new_nums))}]"
-        return re.sub(r"\[(.*?)\]", repl, text) # Fixed regex from \\[ to \[
+        return re.sub(r"\[(.*?)\]", repl, text)
 
     ai_response = replace_citation_ids(full_reply, id_mapping)
 
@@ -188,7 +174,6 @@ Respond with:
                 updated_chunk["id"] = new_id
                 citations.append(updated_chunk)
 
-    # Update conversation history in the passed-in dictionary
     conversation_store[user_id] = {
         "chat": conversation_history + f"\nUser: {user_query}\nAI: {ai_response}",
         "history": history_list
@@ -207,7 +192,6 @@ SOURCES:
 {citations}
     """
 
-    # Use await with openai_client.chat.completions.create
     follow_up_response = await openai_client.chat.completions.create(
         messages=[{"role": "user", "content": follow_up_prompt}],
         model=deployment_name
@@ -220,5 +204,3 @@ SOURCES:
         "citations": citations,
         "follow_ups": follow_ups_raw
     }
-
-# Remove if __name__ == "__main__": app.run(debug=True) from here
