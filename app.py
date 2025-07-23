@@ -1,22 +1,18 @@
-from flask import Flask, jsonify
+from quart import Quart, request, jsonify
 from saml import saml_login, saml_callback, extract_token
 import os
 
-
-app = Flask(__name__)
+# Initialize Quart app
+app = Quart(__name__)
 app.config["SAML_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saml")
-app.config["SECRET_KEY"] = os.getenv('JWT_SECRET_KEY')
+app.config["SECRET_KEY"] = "your-secret-key"  # Replace with hardcoded key or securely read it, as you prefer.
 
-
-
+# ---- Basic route ----
 @app.route('/')
 def hello():
     return 'Hello!'
 
-
-
-
-# SAML routes
+# ---- SAML routes ----
 @app.route('/saml/login')
 def login():
     return saml_login(app.config["SAML_PATH"])
@@ -29,12 +25,18 @@ def login_callback():
 def func_get_data_from_token():
     return extract_token()
 
-
-from search_query import ask
+# ---- Async ask route ----
+from search_query import ask  # Make sure `ask(data)` is async
 @app.route('/ask', methods=['POST'])
-def call_ask():
-    return ask()
+async def call_ask():
+    try:
+        data = await request.get_json()
+        result = await ask(data)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+# ---- All other sync routes ----
 from user_login_log import log_user
 @app.route('/log/user', methods=['POST'])
 def call_log_user():
@@ -60,7 +62,11 @@ from update_settings import update_settings
 def call_update_settings():
     return update_settings()
 
+# ---- Optional sync test route ----
+@app.route("/ping", methods=["GET"])
+def ping():
+    return "pong"
 
-
+# ---- Main Entry Point ----
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
