@@ -24,7 +24,7 @@ try:
     openai_client = AsyncAzureOpenAI( # Use AsyncAzureOpenAI
         api_version="2025-01-01-preview",
         azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
-        # azure_ad_token_provider=token_provider # No longer needed with AsyncDefaultAzureCredential
+        api_key="1inOabIDqV45oV8EyGXA4qGFqN3Ip42pqA5Qd9TAbJFgUdmTBQUPJQQJ99BCACHYHv6XJ3w3AAAAACOGuszT"
     )
 
     search_client = AsyncSearchClient( # Use AsyncSearchClient
