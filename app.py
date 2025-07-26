@@ -53,23 +53,15 @@ async def call_ask():
 # ---- All other sync routes ----
 from user_login_log import log_user
 @app.route('/log/user', methods=['POST'])
-def call_log_user():
-    return log_user()
+async def call_log_user():
+    return await log_user()
 
-# from feedback import submit_feedback
-# @app.route('/feedback', methods=['POST'])
-# def call_submit_feedback():
-#     return submit_feedback()
 
 from feedback import submit_feedback
 @app.route('/feedback', methods=['POST'])
 async def call_submit_feedback():
     return await submit_feedback()
 
-# from logging_chat import log_query
-# @app.route('/log', methods=['POST'])
-# def call_log_query():
-#     return log_query()
 
 from logging_chat import log_query
 @app.route('/log', methods=['POST'])
@@ -77,20 +69,11 @@ async def call_log_query():
     return await log_query()
 
 
-# from get_settings import get_settings
-# @app.route('/get_settings', methods=['GET'])
-# def call_get_settings():
-#     return get_settings()
-
 from get_settings import get_settings
 @app.route('/get_settings', methods=['GET'])
 async def call_get_settings():
     return await get_settings()
-
-# from update_settings import update_settings
-# @app.route('/update_settings', methods=['POST'])
-# def call_update_settings():
-#     return update_settings()
+    
 
 from update_settings import update_settings
 @app.route('/update_settings', methods=['POST'])
