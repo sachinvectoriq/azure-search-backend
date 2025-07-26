@@ -66,10 +66,16 @@ from feedback import submit_feedback
 async def call_submit_feedback():
     return await submit_feedback()
 
+# from logging_chat import log_query
+# @app.route('/log', methods=['POST'])
+# def call_log_query():
+#     return log_query()
+
 from logging_chat import log_query
 @app.route('/log', methods=['POST'])
-def call_log_query():
-    return log_query()
+async def call_log_query():
+    return await log_query()
+
 
 # from get_settings import get_settings
 # @app.route('/get_settings', methods=['GET'])
