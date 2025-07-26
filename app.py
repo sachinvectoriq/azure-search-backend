@@ -71,10 +71,15 @@ from logging_chat import log_query
 def call_log_query():
     return log_query()
 
+# from get_settings import get_settings
+# @app.route('/get_settings', methods=['GET'])
+# def call_get_settings():
+#     return get_settings()
+
 from get_settings import get_settings
 @app.route('/get_settings', methods=['GET'])
-def call_get_settings():
-    return get_settings()
+async def call_get_settings():
+    return await get_settings()
 
 from update_settings import update_settings
 @app.route('/update_settings', methods=['POST'])
