@@ -1,57 +1,50 @@
-from flask import Flask, request, jsonify
-import psycopg2
-from psycopg2 import sql
-from datetime import datetime
+# user_login_log.py
+
+import asyncpg
+from quart import request, jsonify
 import os
+from datetime import datetime
+from dotenv import load_dotenv  
 
-app = Flask(__name__)
+load_dotenv()
 
-# Database configuration
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME'),
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME'),
+    'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT')
 }
 
-def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+async def get_db_connection():
+    return await asyncpg.connect(**DB_CONFIG)
 
-@app.route('/log_user', methods=['POST'])
-def log_user():
-    data = request.get_json()
+async def log_user():
+    data = await request.get_json()
     if not data or 'user_name' not in data:
         return jsonify({'error': 'Missing "user_name" in request body'}), 400
 
     user_name = data['user_name']
 
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        conn = await get_db_connection()
 
-        insert_query = sql.SQL("""
+        insert_query = """
             INSERT INTO azaisearch_login_log (user_name)
-            VALUES (%s)
+            VALUES ($1)
             RETURNING login_session_id, user_name, date_and_time;
-        """)
+        """
 
-        cur.execute(insert_query, [user_name])
-        inserted_row = cur.fetchone()
+        row = await conn.fetchrow(insert_query, user_name)
 
-        conn.commit()
-        cur.close()
-        conn.close()
+        await conn.close()
 
         return jsonify({
             'message': 'User logged successfully',
-            'login_session_id': inserted_row[0],
-            'user_name': inserted_row[1],
-            'date_and_time': inserted_row[2].strftime("%Y-%m-%d %H:%M:%S")
+            'login_session_id': row['login_session_id'],
+            'user_name': row['user_name'],
+            'date_and_time': row['date_and_time'].strftime("%Y-%m-%d %H:%M:%S")
         }), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
