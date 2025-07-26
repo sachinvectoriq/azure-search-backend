@@ -1,30 +1,28 @@
-from flask import Flask, request, jsonify
-import psycopg2
-from datetime import datetime
-import os
+# feedback.py
 
-app = Flask(__name__)
+import asyncpg
+from quart import request, jsonify
+import os
+from dotenv import load_dotenv  
+
+load_dotenv()
 
 # Database configuration
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME'),
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME'),
+    'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT')
 }
 
-def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+async def get_db_connection():
+    return await asyncpg.connect(**DB_CONFIG)
 
-
-# --- Route to insert feedback ---
-@app.route('/submit_feedback', methods=['POST'])
-def submit_feedback():
+async def submit_feedback():
     try:
-        data = request.get_json()
+        data = await request.get_json()
 
-        # Extracting values from JSON
         chat_session_id = data.get("chat_session_id")
         user_name = data.get("user_name")
         query = data.get("query")
@@ -35,33 +33,22 @@ def submit_feedback():
         login_session_id = data.get("login_session_id")
         user_id = data.get("user_id")
 
+        conn = await get_db_connection()
 
-        # Connect to PostgreSQL
-        conn = get_db_connection()
-
-        cursor = conn.cursor()
-
-        # Insert into table
         insert_query = """
             INSERT INTO azaisearch_feedback 
             (chat_session_id, user_name, date_and_time, query, ai_response, citations, feedback_type, feedback, login_session_id, user_id)
-            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s)
+            VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9)
         """
 
-        cursor.execute(insert_query, (
+        await conn.execute(insert_query,
             chat_session_id, user_name, query, ai_response,
             citations, feedback_type, feedback, login_session_id, user_id
-        ))
-        conn.commit()
+        )
 
-        cursor.close()
-        conn.close()
+        await conn.close()
 
         return jsonify({"status": "success", "message": "Feedback submitted successfully"}), 201
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-# --- Run the app ---
-if __name__ == '__main__':
-    app.run(debug=True)
