@@ -1,39 +1,45 @@
-from flask import Flask, request, jsonify
-import psycopg2
+# logging_chat.py
+
+import asyncpg
+from quart import request, jsonify
 import os
+from dotenv import load_dotenv  
 
-app = Flask(__name__)
+load_dotenv()
 
-# Database configuration
+# Async DB config
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME'),
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME'),
+    'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT')
 }
 
-def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+async def get_db_connection():
+    return await asyncpg.connect(**DB_CONFIG)
 
-@app.route('/log', methods=['POST'])
-def log_query():
-    data = request.get_json()
+async def log_query():
+    data = await request.get_json()
 
-    required_fields = ["chat_session_id", "user_id", "user_name", "query", "ai_response", "citations", "login_session_id"]
+    required_fields = [
+        "chat_session_id", "user_id", "user_name",
+        "query", "ai_response", "citations", "login_session_id"
+    ]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing one or more required fields."}), 400
 
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        conn = await get_db_connection()
 
         insert_query = """
-            INSERT INTO azaisearch_logging (chat_session_id, user_id, user_name, query, ai_response, citations, login_session_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO azaisearch_logging 
+            (chat_session_id, user_id, user_name, query, ai_response, citations, login_session_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
         """
 
-        cur.execute(insert_query, (
+        await conn.execute(
+            insert_query,
             data["chat_session_id"],
             data["user_id"],
             data["user_name"],
@@ -41,16 +47,11 @@ def log_query():
             data["ai_response"],
             data["citations"],
             data["login_session_id"]
-        ))
+        )
 
-        conn.commit()
-        cur.close()
-        conn.close()
+        await conn.close()
 
         return jsonify({"message": "Log inserted successfully"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
