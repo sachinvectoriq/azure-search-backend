@@ -81,10 +81,15 @@ from get_settings import get_settings
 async def call_get_settings():
     return await get_settings()
 
+# from update_settings import update_settings
+# @app.route('/update_settings', methods=['POST'])
+# def call_update_settings():
+#     return update_settings()
+
 from update_settings import update_settings
 @app.route('/update_settings', methods=['POST'])
-def call_update_settings():
-    return update_settings()
+async def call_update_settings():
+    return await update_settings()
 
 # ---- Optional sync test route ----
 @app.route("/ping", methods=["GET"])
