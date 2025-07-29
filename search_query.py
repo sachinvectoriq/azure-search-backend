@@ -73,7 +73,7 @@ async def ask_query(user_query, user_id, conversation_store):
             vector_queries=[vector_query],
             select=["title", "chunk", "parent_id"],
             top=k_value,
-            semantic_configuration_name="index-obe-final-semantic-configuration",
+            semantic_configuration_name="index-obe-jul29-semantic-configuration",
             query_type="semantic"
         )
         chunks = []
