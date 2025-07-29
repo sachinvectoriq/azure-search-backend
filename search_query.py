@@ -12,7 +12,7 @@ try:
     credential = AsyncDefaultAzureCredential()
 
     AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
-    index_name = "index-obe-final"
+    index_name = "index-obe-jul29"
     deployment_name = "ocm-gpt-4o"
 
     openai_client = AsyncAzureOpenAI(
