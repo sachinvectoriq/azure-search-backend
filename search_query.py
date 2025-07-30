@@ -85,24 +85,35 @@ async def ask_query(user_query, user_id, conversation_store):
             parent_id_encoded = doc.get("parent_id", "Unknown Document")
             parent_id_decoded = safe_base64_decode(parent_id_encoded)
             chunk_id = start_index + i
-            chunks.append({
+            chunk_obj = {
                 "id": chunk_id,
                 "title": title,
                 "chunk": chunk_content,
                 "parent_id": parent_id_decoded
-            })
+            }
+            chunks.append(chunk_obj)
             sources.append(
                 f"Source ID: [{chunk_id}]\nContent: {chunk_content}\nDocument: {parent_id_decoded}"
             )
             i += 1
         return chunks, sources
 
+    # Fetch chunks from both history and standalone query
     history_chunks, history_sources = await fetch_chunks(history_queries, 5, 1)
     standalone_chunks, standalone_sources = await fetch_chunks(user_query, 5, 6)
 
+    # Combine all chunks and sources
     all_chunks = history_chunks + standalone_chunks
     all_sources = history_sources + standalone_sources
     sources_formatted = "\n\n---\n\n".join(all_sources)
+
+    # ✅ Print all fetched chunks (citations) before sending to AI
+    print("\n--- ALL CHUNKS RETURNED BY AZURE SEARCH ---")
+    for chunk in all_chunks:
+        print(f"[{chunk['id']}] Title: {chunk['title']}")
+        print(f"Parent ID: {chunk['parent_id']}")
+        print(f"Content: {chunk['chunk'][:300]}...")  # Truncate preview
+        print("--------------------------------------------------")
 
     prompt_template = """
 You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
@@ -112,7 +123,7 @@ Guidelines:
 - Extract only factual information present in the chunks.
 - Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
 - Do not add any information not explicitly present in the source chunks.
-- Provide a summary followed by supporting details.Use bold words to highlight titles and important words
+- Provide a summary followed by supporting details. Use bold words to highlight titles and important words.
 
 Conversation History:
 {conversation_history}
@@ -189,18 +200,20 @@ Q2: <question>
 Q3: <question>
 
 SOURCES:
-{citations}
+{json.dumps(all_chunks, indent=2)}
     """
 
     follow_up_response = await openai_client.chat.completions.create(
         messages=[{"role": "user", "content": follow_up_prompt}],
         model=deployment_name
     )
+
     follow_ups_raw = follow_up_response.choices[0].message.content.strip()
 
     return {
         "query": user_query,
         "ai_response": ai_response,
         "citations": citations,
-        "follow_ups": follow_ups_raw
+        "follow_ups": follow_ups_raw,
+        "fetched_chunks": all_chunks  # ✅ This is now confirmed to include everything
     }
