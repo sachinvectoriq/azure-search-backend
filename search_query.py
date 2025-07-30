@@ -107,7 +107,7 @@ async def ask_query(user_query, user_id, conversation_store):
     seen_chunks = set()
     all_chunks = []
     for chunk in combined_chunks:
-        identifier = (chunk["chunk"], chunk["parent_id"])
+        identifier = chunk["chunk"]
         if identifier not in seen_chunks:
             seen_chunks.add(identifier)
             all_chunks.append(chunk)
