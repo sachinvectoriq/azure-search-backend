@@ -102,9 +102,22 @@ async def ask_query(user_query, user_id, conversation_store):
     history_chunks, history_sources = await fetch_chunks(history_queries, 5, 1)
     standalone_chunks, standalone_sources = await fetch_chunks(user_query, 5, 6)
 
-    # Combine all chunks and sources
-    all_chunks = history_chunks + standalone_chunks
-    all_sources = history_sources + standalone_sources
+    # ✅ DEDUPLICATION STEP ADDED HERE
+    combined_chunks = history_chunks + standalone_chunks
+    seen_chunks = set()
+    all_chunks = []
+    for chunk in combined_chunks:
+        identifier = (chunk["chunk"], chunk["parent_id"])
+        if identifier not in seen_chunks:
+            seen_chunks.add(identifier)
+            all_chunks.append(chunk)
+
+    # Build sources from deduplicated chunks
+    all_sources = []
+    for chunk in all_chunks:
+        all_sources.append(
+            f"Source ID: [{chunk['id']}]\nContent: {chunk['chunk']}\nDocument: {chunk['parent_id']}"
+        )
     sources_formatted = "\n\n---\n\n".join(all_sources)
 
     # ✅ Print all fetched chunks (citations) before sending to AI
@@ -215,5 +228,5 @@ SOURCES:
         "ai_response": ai_response,
         "citations": citations,
         "follow_ups": follow_ups_raw,
-        "fetched_chunks": all_chunks  # ✅ This is now confirmed to include everything
+        "fetched_chunks": all_chunks  # ✅ Deduplicated chunks
     }
