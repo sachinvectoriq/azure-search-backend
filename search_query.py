@@ -135,7 +135,7 @@ Respond with:
     response = await openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
-        temperature=0.7
+        temperature=0.3
     )
 
     full_reply = response.choices[0].message.content.strip()
