@@ -36,7 +36,7 @@ async def submit_feedback():
         conn = await get_db_connection()
 
         insert_query = """
-            INSERT INTO azaisearch_feedback 
+            INSERT INTO azaisearch_qa_feedback 
             (chat_session_id, user_name, date_and_time, query, ai_response, citations, feedback_type, feedback, login_session_id, user_id)
             VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9)
         """
