@@ -1,35 +1,14 @@
+from flask import Flask, request, jsonify
 import base64
 import json
 import re
-
-from azure.search.documents.aio import SearchClient as AsyncSearchClient
+from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizableTextQuery
-from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
-from openai import AsyncAzureOpenAI
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import AzureOpenAI
 
-# Global client initialization
-try:
-    credential = AsyncDefaultAzureCredential()
-
-    AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
-    index_name = "index-obe-jul29"
-    deployment_name = "ocm-gpt-4o"
-
-    openai_client = AsyncAzureOpenAI(
-        api_version="2025-01-01-preview",
-        azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
-        api_key="1inOabIDqV45oV8EyGXA4qGFqN3Ip42pqA5Qd9TAbJFgUdmTBQUPJQQJ99BCACHYHv6XJ3w3AAAAACOGuszT"
-    )
-
-    search_client = AsyncSearchClient(
-        endpoint=AZURE_SEARCH_SERVICE,
-        index_name=index_name,
-        credential=credential
-    )
-
-except Exception as e:
-    print(f"Error initializing global clients in search_query.py: {e}")
-    exit(1)
+app = Flask(__name__)
+user_conversations = {}
 
 def safe_base64_decode(data):
     if data.startswith("https"):
@@ -51,82 +30,74 @@ def safe_base64_decode(data):
     except Exception as e:
         return f"[Invalid Base64] {data} - {str(e)}"
 
-async def ask_query(user_query, user_id, conversation_store):
-    user_data = conversation_store.get(user_id)
-    if user_data:
-        conversation_history = user_data.get("chat", "")
-        history_list = user_data.get("history", [])
-    else:
-        conversation_history = ""
-        history_list = []
+def search_and_answer_query(user_query, user_id):
+    credential = DefaultAzureCredential()
+    token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
 
-    history_list.append(user_query)
-    if len(history_list) > 3:
-        history_list = history_list[-3:]
+    AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
+    index_name = "index-obe-final"
+    deployment_name = "ocm-gpt-4o"
 
-    history_queries = " ".join(history_list)
+    openai_client = AzureOpenAI(
+        api_version="2025-01-01-preview",
+        azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
+        azure_ad_token_provider=token_provider
+    )
 
-    async def fetch_chunks(query_text, k_value, start_index):
+    search_client = SearchClient(
+        endpoint=AZURE_SEARCH_SERVICE,
+        index_name=index_name,
+        credential=credential
+    )
+
+    if user_id not in user_conversations:
+        user_conversations[user_id] = {"history": [], "chat": ""}
+
+    user_conversations[user_id]["history"].append(user_query)
+    if len(user_conversations[user_id]["history"]) > 3:
+        user_conversations[user_id]["history"] = user_conversations[user_id]["history"][-3:]
+
+    history_queries = " ".join(user_conversations[user_id]["history"])
+
+    def fetch_chunks(query_text, k_value, start_index):
         vector_query = VectorizableTextQuery(text=query_text, k_nearest_neighbors=5, fields="text_vector")
-        search_results = await search_client.search(
+        search_results = search_client.search(
             search_text=query_text,
             vector_queries=[vector_query],
             select=["title", "chunk", "parent_id"],
             top=k_value,
-            semantic_configuration_name="index-obe-jul29-semantic-configuration",
+            semantic_configuration_name="index-obe-final-semantic-configuration",
             query_type="semantic"
         )
         chunks = []
         sources = []
-        i = 0
-        async for doc in search_results:
+        for i, doc in enumerate(search_results):
             title = doc.get("title", "N/A")
             chunk_content = doc.get("chunk", "N/A").replace("\n", " ").replace("\t", " ").strip()
             parent_id_encoded = doc.get("parent_id", "Unknown Document")
             parent_id_decoded = safe_base64_decode(parent_id_encoded)
             chunk_id = start_index + i
-            chunk_obj = {
+            chunks.append({
                 "id": chunk_id,
                 "title": title,
                 "chunk": chunk_content,
                 "parent_id": parent_id_decoded
-            }
-            chunks.append(chunk_obj)
+            })
             sources.append(
                 f"Source ID: [{chunk_id}]\nContent: {chunk_content}\nDocument: {parent_id_decoded}"
             )
-            i += 1
         return chunks, sources
 
-    # Fetch chunks from both history and standalone query
-    history_chunks, history_sources = await fetch_chunks(history_queries, 5, 1)
-    standalone_chunks, standalone_sources = await fetch_chunks(user_query, 5, 6)
+    # First call: history
+    history_chunks, history_sources = fetch_chunks(history_queries, 5, 1)
+    # Second call: current query
+    standalone_chunks, standalone_sources = fetch_chunks(user_query, 5, 6)
 
-    # ✅ DEDUPLICATION STEP ADDED HERE
-    combined_chunks = history_chunks + standalone_chunks
-    seen_chunks = set()
-    all_chunks = []
-    for chunk in combined_chunks:
-        identifier = chunk["chunk"]
-        if identifier not in seen_chunks:
-            seen_chunks.add(identifier)
-            all_chunks.append(chunk)
-
-    # Build sources from deduplicated chunks
-    all_sources = []
-    for chunk in all_chunks:
-        all_sources.append(
-            f"Source ID: [{chunk['id']}]\nContent: {chunk['chunk']}\nDocument: {chunk['parent_id']}"
-        )
+    all_chunks = history_chunks + standalone_chunks
+    all_sources = history_sources + standalone_sources
     sources_formatted = "\n\n---\n\n".join(all_sources)
 
-    # ✅ Print all fetched chunks (citations) before sending to AI
-    print("\n--- ALL CHUNKS RETURNED BY AZURE SEARCH ---")
-    for chunk in all_chunks:
-        print(f"[{chunk['id']}] Title: {chunk['title']}")
-        print(f"Parent ID: {chunk['parent_id']}")
-        print(f"Content: {chunk['chunk'][:300]}...")  # Truncate preview
-        print("--------------------------------------------------")
+    conversation_history = user_conversations[user_id]["chat"]
 
     prompt_template = """
 You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
@@ -136,7 +107,7 @@ Guidelines:
 - Extract only factual information present in the chunks.
 - Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
 - Do not add any information not explicitly present in the source chunks.
-- Provide a summary followed by supporting details. Use bold words to highlight titles and important words.
+- Provide a summary followed by supporting details.Use bold words to highlight titles and important words
 
 Conversation History:
 {conversation_history}
@@ -156,7 +127,7 @@ Respond with:
         query=user_query
     )
 
-    response = await openai_client.chat.completions.create(
+    response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
         temperature=0.7
@@ -164,6 +135,8 @@ Respond with:
 
     full_reply = response.choices[0].message.content.strip()
 
+    # Standardize citation format: [1, 2] not [12] or [1,2]
+    original_ids = list(map(int, re.findall(r"\[(\d+(?:,\s*\d+)*?)\]", full_reply)))
     flat_ids = []
     for match in re.findall(r"\[(.*?)\]", full_reply):
         parts = match.split(",")
@@ -198,10 +171,7 @@ Respond with:
                 updated_chunk["id"] = new_id
                 citations.append(updated_chunk)
 
-    conversation_store[user_id] = {
-        "chat": conversation_history + f"\nUser: {user_query}\nAI: {ai_response}",
-        "history": history_list
-    }
+    user_conversations[user_id]["chat"] += f"\nUser: {user_query}\nAI: {ai_response}"
 
     follow_up_prompt = f"""
 Based only on the following chunks of source material, generate 3 follow-up questions the user might ask.
@@ -213,20 +183,34 @@ Q2: <question>
 Q3: <question>
 
 SOURCES:
-{json.dumps(all_chunks, indent=2)}
+{citations}
     """
 
-    follow_up_response = await openai_client.chat.completions.create(
+    follow_up_response = openai_client.chat.completions.create(
         messages=[{"role": "user", "content": follow_up_prompt}],
         model=deployment_name
     )
-
     follow_ups_raw = follow_up_response.choices[0].message.content.strip()
 
     return {
         "query": user_query,
         "ai_response": ai_response,
         "citations": citations,
-        "follow_ups": follow_ups_raw,
-        "fetched_chunks": all_chunks  # ✅ Deduplicated chunks
+        "follow_ups": follow_ups_raw
     }
+
+@app.route("/ask", methods=["POST"])
+def ask():
+    data = request.get_json()
+    if not data or "query" not in data:
+        return jsonify({"error": "Missing 'query' in request body"}), 400
+
+    user_id = data.get("user_id", "default_user")
+    try:
+        result = search_and_answer_query(data["query"], user_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
