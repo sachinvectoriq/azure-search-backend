@@ -25,19 +25,9 @@ async def connect_db():
         return None
 
 async def update_settings():
-    # Get admin_id from query parameters
-    admin_id_str = request.args.get('admin_id')
-    if not admin_id_str:
-        return jsonify({'error': 'Missing admin_id in query parameters'}), 400
-    
-    try:
-        admin_id = int(admin_id_str)
-    except ValueError:
-        return jsonify({'error': 'admin_id must be a valid integer'}), 400
-
     # Read form data
     form = await request.form
-    update_fields = {}
+    insert_fields = {}
     
     # Define field types for proper conversion
     field_types = {
@@ -47,48 +37,50 @@ async def update_settings():
         'openai_model_deployment_name': str,
         'openai_endpoint': str,
         'openai_api_version': str,
-        'openai_model_temperature': float,  # This is likely the problem!
-        'semantic_configuration_name': str
+        'openai_model_temperature': float,  
+        'semantic_configuration_name': str,
+        'azure_search_api_key': str
     }
 
     for field, field_type in field_types.items():
         if form.get(field) is not None:
             try:
                 if field_type == float:
-                    update_fields[field] = float(form.get(field))
+                    insert_fields[field] = float(form.get(field))
                 elif field_type == int:
-                    update_fields[field] = int(form.get(field))
+                    insert_fields[field] = int(form.get(field))
                 else:
-                    update_fields[field] = form.get(field)
+                    insert_fields[field] = form.get(field)
             except ValueError:
                 return jsonify({'error': f'Invalid {field_type.__name__} value for {field}'}), 400
 
-    if not update_fields:
-        return jsonify({'error': 'No valid fields provided to update'}), 400
+    if not insert_fields:
+        return jsonify({'error': 'No valid fields provided to insert'}), 400
 
     conn = await connect_db()
     if conn is None:
         return jsonify({'error': 'Database connection failed'}), 500
 
     try:
-        # Build query dynamically
-        set_clause = ', '.join(f"{key} = ${i+1}" for i, key in enumerate(update_fields.keys()))
-        values = list(update_fields.values())
-        values.append(admin_id)  # last param for WHERE
+        # Build INSERT query dynamically
+        columns = ', '.join(insert_fields.keys())
+        placeholders = ', '.join(f"${i+1}" for i in range(len(insert_fields)))
+        values = list(insert_fields.values())
 
         query = f"""
-            UPDATE azaisearch_ocm_settings
-            SET {set_clause}
-            WHERE admin_id = ${len(values)}
+            INSERT INTO azaisearch_qa_ocm_settings ({columns})
+            VALUES ({placeholders})
+            RETURNING update_id
         """
 
-        result = await conn.execute(query, *values)
+        # Execute query and get the new update_id
+        new_update_id = await conn.fetchval(query, *values)
         await conn.close()
 
-        if result == "UPDATE 0":
-            return jsonify({'message': f'No row found with admin_id={admin_id}'}), 404
-
-        return jsonify({'message': f'Row with admin_id={admin_id} updated successfully'})
+        return jsonify({
+            'message': f'New settings row created successfully with update_id={new_update_id}',
+            'update_id': new_update_id
+        })
 
     except Exception as e:
         print(f"Database error: {e}")
