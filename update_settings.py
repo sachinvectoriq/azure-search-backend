@@ -39,7 +39,9 @@ async def update_settings():
         'openai_api_version': str,
         'openai_model_temperature': float,  
         'semantic_configuration_name': str,
-        'openai_api_key': str
+        'openai_api_key': str,
+        'user_name': str,
+        'login_session_id': str
     }
 
     for field, field_type in field_types.items():
