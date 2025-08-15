@@ -43,7 +43,7 @@ async def load_settings_and_get_clients():
     try:
         query = """
             SELECT * 
-            FROM azaisearch_ocm_settings2
+            FROM azaisearch_qa_ocm_settings
             WHERE update_id = (SELECT MAX(update_id) FROM azaisearch_qa_ocm_settings)
         """
         row = await conn.fetchrow(query)
@@ -97,4 +97,5 @@ async def load_settings_and_get_clients():
     print("✅ Azure Search client initialized:", search_client is not None)
 
     return settings
+
 
