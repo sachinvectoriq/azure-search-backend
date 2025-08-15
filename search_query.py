@@ -1,35 +1,44 @@
+
 import base64
 import json
 import re
+import os
+import textwrap
+from dotenv import load_dotenv
+from quart import request, jsonify
+import asyncpg
 
 from azure.search.documents.aio import SearchClient as AsyncSearchClient
 from azure.search.documents.models import VectorizableTextQuery
 from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
 from openai import AsyncAzureOpenAI
 
-# Global client initialization
-try:
-    credential = AsyncDefaultAzureCredential()
+from load_settings_and_clients_from_db import load_settings_and_get_clients
 
-    AZURE_SEARCH_SERVICE = "https://aiconciergeserach.search.windows.net"
-    index_name = "index-obe-jul29"
-    deployment_name = "ocm-gpt-4o"
 
-    openai_client = AsyncAzureOpenAI(
-        api_version="2025-01-01-preview",
-        azure_endpoint="https://ai-hubdevaiocm273154123411.cognitiveservices.azure.com/",
-        api_key="1inOabIDqV45oV8EyGXA4qGFqN3Ip42pqA5Qd9TAbJFgUdmTBQUPJQQJ99BCACHYHv6XJ3w3AAAAACOGuszT"
-    )
+# Load environment variables
+load_dotenv()
 
-    search_client = AsyncSearchClient(
-        endpoint=AZURE_SEARCH_SERVICE,
-        index_name=index_name,
-        credential=credential
-    )
+# Async DB config
+DB_CONFIG = {
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME'),
+    'host': os.getenv('DB_HOST'),
+    'port': os.getenv('DB_PORT')
+}
 
-except Exception as e:
-    print(f"Error initializing global clients in search_query.py: {e}")
-    exit(1)
+# ========================
+# DB Connection
+# ========================
+async def connect_db():
+    try:
+        return await asyncpg.connect(**DB_CONFIG)
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        return None
+    
+
 
 def safe_base64_decode(data):
     if data.startswith("https"):
@@ -52,6 +61,22 @@ def safe_base64_decode(data):
         return f"[Invalid Base64] {data} - {str(e)}"
 
 async def ask_query(user_query, user_id, conversation_store):
+    # ✅ Load fresh settings and clients for each request
+    try:
+        config = await load_settings_and_get_clients()
+    except Exception as e:
+        print(f"❌ Failed to load settings: {e}")
+        raise RuntimeError("Failed to initialize AI services")
+
+    # Extract settings and clients from config
+    current_prompt = config['current_prompt']
+    openai_client = config['openai_client']
+    search_client = config['search_client']
+    deployment_name = config['deployment_name']
+    openai_model_temperature = config['openai_model_temperature']
+    semantic_configuration_name = config['semantic_configuration_name']
+
+    
     user_data = conversation_store.get(user_id)
     if user_data:
         conversation_history = user_data.get("chat", "")
@@ -73,7 +98,7 @@ async def ask_query(user_query, user_id, conversation_store):
             vector_queries=[vector_query],
             select=["title", "chunk", "parent_id"],
             top=k_value,
-            semantic_configuration_name="index-obe-jul29-semantic-configuration",
+            semantic_configuration_name=semantic_configuration_name,
             query_type="semantic"
         )
         chunks = []
@@ -128,27 +153,7 @@ async def ask_query(user_query, user_id, conversation_store):
         print(f"Content: {chunk['chunk'][:300]}...")  # Truncate preview
         print("--------------------------------------------------")
 
-    prompt_template = """
-You are an AI assistant. Use the most relevant and informative source chunks below to answer the user's query.
-
-Guidelines:
-- Focus your answer primarily on the chunk(s) that contain the most direct and complete answer.
-- Extract only factual information present in the chunks.
-- Each fact must be followed immediately by the citation in square brackets, e.g., [3]. Only cite the chunk ID that directly supports the statement.
-- Do not add any information not explicitly present in the source chunks.
-- Provide a summary followed by supporting details. Use bold words to highlight titles and important words.
-
-Conversation History:
-{conversation_history}
-
-Sources:
-{sources}
-
-User Question: {query}
-
-Respond with:
-- An answer citing sources inline like [1], [2], especially where the answer is clearly supported.
-"""
+    prompt_template = f"""{current_prompt}"""
 
     prompt = prompt_template.format(
         conversation_history=conversation_history,
@@ -159,7 +164,7 @@ Respond with:
     response = await openai_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model=deployment_name,
-        temperature=0.7
+        temperature=openai_model_temperature
     )
 
     full_reply = response.choices[0].message.content.strip()
