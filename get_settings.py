@@ -1,5 +1,3 @@
-# get_settings.py
-
 import os
 import asyncpg
 from quart import request, jsonify
@@ -25,24 +23,20 @@ async def connect_db():
         return None
 
 async def get_settings():
-    # admin_id = request.args.get('admin_id')
-    admin_id = int(request.args.get('admin_id'))
-    if not admin_id:
-        return jsonify({'error': 'Missing admin_id in query parameters'}), 400
-
     conn = await connect_db()
     if conn is None:
         return jsonify({'error': 'Database connection failed'}), 500
 
     try:
+        # Query to get the row with maximum update_id (latest entry)
         query = """
-            SELECT * FROM azaisearch_ocm_settings
-            WHERE admin_id = $1
+            SELECT * FROM azaisearch_qa_ocm_settings
+            WHERE update_id = (SELECT MAX(update_id) FROM azaisearch_qa_ocm_settings)
         """
-        row = await conn.fetchrow(query, admin_id)
+        row = await conn.fetchrow(query)
 
         if row is None:
-            return jsonify({'message': f'No row found with admin_id={admin_id}'}), 404
+            return jsonify({'message': 'No settings found in the table'}), 404
 
         result = dict(row)
         return jsonify(result)
