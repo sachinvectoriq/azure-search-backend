@@ -31,7 +31,7 @@ async def get_settings():
         # Query to get the row with maximum update_id (latest entry)
         query = """
             SELECT * FROM azaisearch_ocm_settings2
-            WHERE update_id = (SELECT MAX(update_id) FROM azaisearch_qa_ocm_settings)
+            WHERE update_id = (SELECT MAX(update_id) FROM azaisearch_ocm_settings2)
         """
         row = await conn.fetchrow(query)
 
