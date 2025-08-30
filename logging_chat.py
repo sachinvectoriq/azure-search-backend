@@ -29,13 +29,18 @@ async def log_query():
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing one or more required fields."}), 400
 
+
+    # Optional field
+    job_title = data.get("job_title")  # None if absent [12]
+
+    
     try:
         conn = await get_db_connection()
 
         insert_query = """
             INSERT INTO azaisearch_logging 
-            (chat_session_id, user_id, user_name, query, ai_response, citations, login_session_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (chat_session_id, user_id, user_name, query, ai_response, citations, login_session_id, job_title)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """
 
         await conn.execute(
@@ -46,7 +51,8 @@ async def log_query():
             data["query"],
             data["ai_response"],
             data["citations"],
-            data["login_session_id"]
+            data["login_session_id"],
+            job_title # can be None -> inserts NULL
         )
 
         await conn.close()
