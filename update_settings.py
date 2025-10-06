@@ -41,7 +41,9 @@ async def update_settings():
         'semantic_configuration_name': str,
         'openai_api_key': str,
         'user_name': str,
-        'login_session_id': str
+        'login_session_id': str,
+        'number_of_chunks': int
+
     }
 
     for field, field_type in field_types.items():
