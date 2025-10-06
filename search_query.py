@@ -75,6 +75,8 @@ async def ask_query(user_query, user_id, conversation_store):
     deployment_name = config['deployment_name']
     openai_model_temperature = config['openai_model_temperature']
     semantic_configuration_name = config['semantic_configuration_name']
+    number_of_chunks = config['number_of_chunks']
+
 
     
     user_data = conversation_store.get(user_id)
@@ -123,9 +125,15 @@ async def ask_query(user_query, user_id, conversation_store):
             i += 1
         return chunks, sources
 
-    # Fetch chunks from both history and standalone query
-    history_chunks, history_sources = await fetch_chunks(history_queries, 5, 1)
-    standalone_chunks, standalone_sources = await fetch_chunks(user_query, 5, 6)
+
+
+        # Calculate split: half for history, half for standalone (adjust as needed)
+    history_chunk_count = number_of_chunks 
+    standalone_chunk_count = number_of_chunks
+    
+    # # Fetch chunks from both history and standalone query
+    history_chunks, history_sources = await fetch_chunks(history_queries, history_chunk_count, 1)
+    standalone_chunks, standalone_sources = await fetch_chunks(user_query, standalone_chunk_count, number_of_chunks + 1)
 
     # ✅ DEDUPLICATION STEP ADDED HERE
     combined_chunks = history_chunks + standalone_chunks
@@ -235,3 +243,4 @@ SOURCES:
         "follow_ups": follow_ups_raw,
         "fetched_chunks": all_chunks  # ✅ Deduplicated chunks
     }
+
