@@ -61,7 +61,8 @@ async def load_settings_and_get_clients():
             'openai_endpoint': row["openai_endpoint"],
             'openai_model_deployment_name': row["openai_model_deployment_name"],
             'openai_model_temperature': float(row["openai_model_temperature"]),
-            'semantic_configuration_name': row["semantic_configuration_name"]
+            'semantic_configuration_name': row["semantic_configuration_name"],
+            'number_of_chunks': int(row["number_of_chunks"])
         }
 
         print("✅ Settings loaded from DB:")
@@ -69,6 +70,8 @@ async def load_settings_and_get_clients():
         print(f"azure_search_endpoint: {settings['azure_search_endpoint']}")
         print(f"azure_search_index_name: {settings['azure_search_index_name']}")
         print(f"openai_model_temperature: {settings['openai_model_temperature']}")
+        print(f"number_of_chunks: {settings['number_of_chunks']}")
+
 
     finally:
         await conn.close()
@@ -97,5 +100,6 @@ async def load_settings_and_get_clients():
     print("✅ Azure Search client initialized:", search_client is not None)
 
     return settings
+
 
 
