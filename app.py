@@ -80,6 +80,48 @@ from update_settings import update_settings
 async def call_update_settings():
     return await update_settings()
 
+
+
+
+from report import azai_report
+@app.route('/azai_report', methods=['POST'])
+async def call_azai_report():
+    try:
+        # Get JSON data from request
+        data = await request.get_json()
+        
+        # Extract parameters
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        user_name = data.get('user_name')
+        feedback_type = data.get('feedback_type')
+        
+        # Validate required fields
+        if not start_date or not end_date:
+            return jsonify({"error": "start_date and end_date are required"}), 400
+        
+        # Call the function with extracted parameters
+        result = await azai_report(
+            start_date=start_date,
+            end_date=end_date,
+            user_name=user_name,
+            feedback_type=feedback_type
+        )
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    
+from distinct_values import get_distinct_values
+@app.route('/distinct_values', methods=['GET'])
+async def call_distinct_values():
+    return await get_distinct_values()
+
+
+
+
 # ---- Optional sync test route ----
 @app.route("/ping", methods=["GET"])
 def ping():
