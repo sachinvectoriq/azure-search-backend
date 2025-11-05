@@ -122,6 +122,27 @@ async def call_distinct_values():
 
 
 
+from reports_access_get import get_reports_access 
+@app.route('/get_reports_access', methods=['GET'])
+async def get_reports_access_route():
+    return await get_reports_access()
+
+
+from reports_access_add_user import add_reports_access_user
+@app.route('/add_reports_access_user', methods=['POST'])
+async def add_reports_access_user_route():
+    return await add_reports_access_user()
+
+from reports_access_delete import delete_reports_access
+@app.route('/delete_reports_access', methods=['DELETE'])
+async def delete_reports_access_route():
+    return await delete_reports_access()
+
+
+
+
+
+
 # ---- Optional sync test route ----
 @app.route("/ping", methods=["GET"])
 def ping():
