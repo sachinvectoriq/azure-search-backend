@@ -64,7 +64,7 @@ async def saml_login(saml_path):
         print(f'Error during SAML login: {str(e)}')
         return f'Internal Server Error: {str(e)}', 500
 
-# SAML callback route
+# SAML callback route with email included
 async def saml_callback(saml_path):
     print('In SAML Callback')
     req = await prepare_quart_request(request)
@@ -91,7 +91,8 @@ async def saml_callback(saml_path):
         user_data = {
             'name': json_data.get('http://schemas.microsoft.com/identity/claims/displayname'),
             'group': group_name,
-            'job_title': json_data.get('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/jobtitle')
+            'job_title': json_data.get('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/jobtitle'),
+            'email': json_data.get('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress')  # Added here
         }
 
         await asyncio.to_thread(
